@@ -1,0 +1,78 @@
+USE msdb;
+GO
+
+SELECT
+    j.name AS job_name,
+    s.name AS schedule_name,
+    CASE s.freq_type
+        WHEN 1 THEN 'Once'
+        WHEN 4 THEN 'Daily'
+        WHEN 8 THEN 'Weekly on ' +
+                         CASE WHEN s.freq_interval & 1 = 1 THEN 'Sun,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 2 = 2 THEN 'Mon,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 4 = 4 THEN 'Tue,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 8 = 8 THEN 'Wed,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 16 = 16 THEN 'Thu,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 32 = 32 THEN 'Fri,' ELSE '' END +
+                         CASE WHEN s.freq_interval & 64 = 64 THEN 'Sat' ELSE '' END +
+                         CASE WHEN s.freq_recurrence_factor > 1 THEN ', every ' + CAST(s.freq_recurrence_factor AS VARCHAR(10)) + ' weeks' ELSE '' END
+        WHEN 16 THEN 'Monthly on day ' + CAST(s.freq_interval AS VARCHAR(2)) +
+                          CASE
+                              WHEN s.freq_interval IN (1, 21, 31) THEN 'st'
+                              WHEN s.freq_interval IN (2, 22) THEN 'nd'
+                              WHEN s.freq_interval IN (3, 23) THEN 'rd'
+                              ELSE 'th'
+                          END +
+                          CASE WHEN s.freq_recurrence_factor > 1 THEN ', every ' + CAST(s.freq_recurrence_factor AS VARCHAR(10)) + ' months' ELSE '' END
+        WHEN 32 THEN 'Monthly on the ' +
+                          CASE s.freq_relative_interval
+                              WHEN 1 THEN 'First'
+                              WHEN 2 THEN 'Second'
+                              WHEN 4 THEN 'Third'
+                              WHEN 8 THEN 'Fourth'
+                              WHEN 16 THEN 'Last'
+                          END +
+                          CASE s.freq_interval
+                              WHEN 1 THEN ' Sunday'
+                              WHEN 2 THEN ' Monday'
+                              WHEN 3 THEN ' Tuesday'
+                              WHEN 4 THEN ' Wednesday'
+                              WHEN 5 THEN ' Thursday'
+                              WHEN 6 THEN ' Friday'
+                              WHEN 7 THEN ' Saturday'
+                              WHEN 8 THEN ' Day'
+                              WHEN 9 THEN ' Weekday'
+                              WHEN 10 THEN ' Weekend Day'
+                          END +
+                          CASE WHEN s.freq_recurrence_factor > 1 THEN ', every ' + CAST(s.freq_recurrence_factor AS VARCHAR(10)) + ' months' ELSE '' END
+        WHEN 64 THEN 'Runs when SQL Server Agent service starts'
+        WHEN 128 THEN 'Runs when the computer is idle'
+    END AS frequency_description,
+    CASE s.freq_subday_type
+        WHEN 1 THEN 'Occurs once at ' + STUFF(STUFF(RIGHT('000000' + CAST(s.active_start_time AS VARCHAR(6)), 6), 3, 0, ':'), 6, 0, ':')
+        WHEN 2 THEN 'Occurs every ' + CAST(s.freq_subday_interval AS VARCHAR(10)) + ' seconds'
+        WHEN 4 THEN 'Occurs every ' + CAST(s.freq_subday_interval AS VARCHAR(10)) + ' minutes'
+        WHEN 8 THEN 'Occurs every ' + CAST(s.freq_subday_interval AS VARCHAR(10)) + ' hours'
+    END AS subday_frequency_description,
+    CASE s.enabled
+        WHEN 1 THEN 'Enabled'
+        WHEN 0 THEN 'Disabled'
+    END AS schedule_status,
+    STUFF(STUFF(CONVERT(VARCHAR, s.active_start_time), 3, 0, ':'), 6, 0, ':') AS active_start_time,
+    STUFF(STUFF(CONVERT(VARCHAR, s.active_end_time), 3, 0, ':'), 6, 0, ':') AS active_end_time,
+    CONVERT(VARCHAR, s.active_start_date, 102) AS active_start_date,
+    CONVERT(VARCHAR, s.active_end_date, 102) AS active_end_date
+FROM
+    msdb.dbo.sysjobs AS j
+INNER JOIN
+    msdb.dbo.sysjobschedules AS js
+ON
+    j.job_id = js.job_id
+INNER JOIN
+    msdb.dbo.sysschedules AS s
+ON
+    js.schedule_id = s.schedule_id
+ORDER BY
+    j.name,
+    s.name;
+GO
