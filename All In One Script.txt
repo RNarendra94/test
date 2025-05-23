@@ -1,0 +1,4145 @@
+---Kindly attach SQL Test PASS results along with DB Owner approvals for further access.
+--IT_HELPDESK_DASHBOARDALL_TRANFLEXI
+
+https://www.dbrnd.com/microsoft-sql-server-dba-scripts/ 
+https://blog.sqlauthority.com/2011/01/04/sql-server-2008-unused-index-script-download/
+https://www.mssqltips.com/sqlservertutorial/256/discovering-unused-indexes/
+https://blogs.msdn.microsoft.com/docast/2018/01/23/database-file-movement-in-sql-alwayson-availability-group-a-walk-through/
+https://sqlserverupdates.com/sql-server-2016-updates/
+https://secure.logmeinrescue.com/Customer/Code.aspx?i=2&Code=177328   --------join ms call.
+
+---------------------------------------------------------------------Index Frang Check and Defrag------------------------------------------------
+
+select distinct case when b.IsCompressed=0 then   'alter index [' + a.indexName + '] on [' + a.DBNAME + ']..[' + a.TableName + '] REBUILD WITH (FILLFACTOR = 100, SORT_IN_TEMPDB = ON,STATISTICS_NORECOMPUTE = OFF,online=on,maxdop=4); --  Current Framentation =' + convert(char,a.avg_fragmentation_in_percent)  
+when b.IsCompressed=2 then  'alter index [' + a.indexName + '] on [' + a.DBNAME + ']..[' + a.TableName + '] REBUILD WITH (FILLFACTOR = 100, data_compression=Page, SORT_IN_TEMPDB = ON, STATISTICS_NORECOMPUTE = OFF,online=on,maxdop=4); --  Current Framentation =' + convert(char,a.avg_fragmentation_in_percent) end   as Query
+from sql_management..frag_output  a
+inner join   SQL_Management..[Frag_DBTable_info] b on a.TableName=b.TableName and a.DBName=b.DBName
+where a.avg_fragmentation_in_percent >30 
+and a.indexName not like '%null%'
+
+		
+
+------------------
+
+select Distinct 'alter index [' + indexName + '] on [' + DBNAME + ']..[' + TableName + '] REBUILD WITH (FILLFACTOR = 90, SORT_IN_TEMPDB = ON, STATISTICS_NORECOMPUTE = OFF,online=on,maxdop=4); --  Current Framentation =' + convert(char,avg_fragmentation_in_percent) as Query  
+from        sql_management..frag_output   where avg_fragmentation_in_percent >50 and indexName not like '%null%'
+
+
+----------------------------------------------Report Server details Query---------------------------------------------------------------------------------------------------
+
+------Report current status (pending)
+
+SELECT n.SubscriptionID, c.Name as ReportName, c.Path as ReportPath, u.UserName as SubscriptionOwner, n.ExtensionSettings,
+n.NotificationEntered as QueuedSinceTime, n.ProcessAfter, n.SubscriptionLastRunTime, n.DeliveryExtension
+from dbo.Notifications n with (nolock)
+inner join dbo.Catalog c with (nolock) on n.ReportID = c.ItemID
+inner join dbo.Users u with (nolock) on n.SubscriptionOwnerID = u.UserID
+WHERE n.ProcessStart is NULL and (n.ProcessAfter is NULL or n.ProcessAfter < GETUTCDATE())and 
+c.name in ('BUREAU_AND_FLAGS_MAINTAIN_DATA_3'
+,'BUREAU_ALTRNT_DETAILS_AND_PARENT_ID_STAMPING'
+,'CTR_INVALID_SUMMARY'
+,'MASTER BACKUP TABLES'
+,'PLCS Tracker'
+,'Sp Bagic data'
+,'RPL Tracker'
+,'CC_report'
+,'POS_LOGIN_CONVENIENCE_FEE'
+,'EMICARD_METRIC_DASHBOARD'
+,'Digital_Channel_Leakage_Mobikwik'
+,'SP_PSBL_TTD_MAIN_V2_2'
+,'XXXX - Pure_Flexi'
+,'MBK CLICKS'
+,'RURAL_MOBIKWIK_SIGNUP_REPORT'
+,'paid media campign'
+,'WALLET_TRACKING_REPORT'
+,'PPL EMI CARD'
+,'Cibilwatch Lead Tracker'
+,'EMICARD_FEES_PAID_NOT_REFUND_MAIN1'
+,'USP_TABLEAU_JOB_ISD_WebPOS_Enquiry_Data'
+,'NON_VOICE_sp'
+,'SP_PSBL_TTD_RULES'
+,'Rural_Credit_checks_Reports_PD_Penitration_Main'
+,'BUREAU_AND_FLAGS_MAINTAIN_DATA_2')
+ORDER BY n.NotificationEntered
+
+-------------
+
+SELECT TOP 100 c.Name,
+               c.[Path],
+               AVG(l.TimeDataRetrieval + l.TimeProcessing + l.TimeRendering) / 1000.0 [AverageExecutionTimeSeconds],
+               SUM(l.TimeDataRetrieval + l.TimeProcessing + l.TimeRendering) / 1000.0 [TotalExecutionTimeSeconds],
+               SUM(l.TimeDataRetrieval + l.TimeProcessing + l.TimeRendering) / 1000.0 / 60 [TotalExecutionTimeMinutes],
+               COUNT(*) TimesRun
+FROM [ReportServer].[dbo].[ExecutionLog](NOLOCK) AS l
+INNER JOIN [ReportServer].[dbo].[Catalog](NOLOCK) AS c ON l.ReportID = C.ItemID
+WHERE c.Type = 2 -- Only show reports 1=folder, 2=Report, 3=Resource, 4=Linked Report, 5=Data Source
+GROUP BY c.Name,
+         c.[Path],
+         l.InstanceName,
+         l.ReportID
+HAVING AVG(l.TimeDataRetrieval + l.TimeProcessing + l.TimeRendering) / 1000.0 > 1
+ORDER BY AVG(l.TimeDataRetrieval + l.TimeProcessing + l.TimeRendering) DESC;
+
+-------------------------------
+
+  SELECT s.[SubscriptionID] -- Subscription ID
+      ,s.[OwnerID] -- Report Ownerddd
+      ,s.[Report_OID] -- Report ID
+      , c.Path -- Report Path
+      ,rs.ScheduleID as SQLJobName -- Name of Job on SQL Server
+      ,s.[Description] -- Description of the report subscription
+      ,s.[LastStatus] -- Status of last subscription execution.
+      ,s.[EventType] -- Subscription type
+      ,s.[LastRunTime] -- Last time subscription executed
+      ,s.[Parameters] -- Parameters used for subscription
+      ,s.[DeliveryExtension] -- How to deliver the subscription
+  FROM [ReportServer].[dbo].[Subscriptions] as s
+  left join dbo.Catalog as c on c.ItemID = s.Report_OID
+  left join dbo.ReportSchedule as rs on rs.ReportID = s.Report_OID
+  WHERE s.LastStatus='pending'
+  ORDER BY s.LastRunTime DESC
+
+------------------------------------
+
+
+select * from reportserver.[dbo].[DataSource] --where Name = 'DS_ProductCount'
+select * from reportserver.[dbo].[Catalog] --where ItemID = '6DB5C9F2-C5D4-4B03-B1A9-2414ABA54427'
+
+select count(1) from reportserver..notifications
+ 
+
+sp_whoisactive
+
+USE ReportServer
+GO
+SELECT d.SubscriptionID,e.name AS ReportName,e.path AS ReportPath,d.LastStatus,d.LastRunTime,u.UserName 
+FROM dbo.Subscriptions d JOIN dbo.Users AS u ON d.ownerid = u.UserID JOIN dbo.Catalog e ON itemid = report_oid
+--WHERE d.LastStatus like '%Fail%' 
+where e.name in ('REMI_Report_Group')
+order by d.LastRunTime desc
+
+sp_rpt 'Pro_Campaign_Lead_Journey_MIS'
+
+sp_rpt REMI_Report_Group
+sp_rpt REMI_Report_Group
+sp_get_queryplan
+exec sql_management..sp_whopro 'session_id in (473)', 'detailed'
+sp_whoisactive321 4
+
+SELECT d.SubscriptionID,e.name AS ReportName,e.path AS ReportPath,d.LastStatus,d.LastRunTime,u.UserName 
+FROM dbo.Subscriptions d JOIN dbo.Users AS u ON d.ownerid = u.UserID JOIN dbo.Catalog e ON itemid = report_oid
+--WHERE d.LastStatus like '%Fail%' 
+where e.name in ('REMI_Report_Group')
+order by d.LastRunTime desc
+
+select * from Notifications
+
+--Queue details sort by time with report name
+USE REPORTSERVER
+GO
+SELECT n.SubscriptionID, c.Name as ReportName, c.Path as ReportPath, u.UserName as SubscriptionOwner, n.ExtensionSettings,
+n.NotificationEntered as QueuedSinceTime, n.ProcessAfter, n.SubscriptionLastRunTime, n.DeliveryExtension
+from dbo.Notifications n with (nolock)
+inner join dbo.Catalog c with (nolock) on n.ReportID = c.ItemID
+inner join dbo.Users u with (nolock) on n.SubscriptionOwnerID = u.UserID
+WHERE n.ProcessStart is NULL and (n.ProcessAfter is NULL or n.ProcessAfter < GETUTCDATE()) 
+--and n.ExtensionSettings like '%ram.shegokar@gmail.com%'
+ORDER BY n.NotificationEntered --
+
+select count(1) from reportserver..notifications where ReportID='3F7B5423-200D-4731-8EB9-D2D26FB2E5CC' 
+
+--Notification table Count
+USE ReportServer
+GO
+select c.Name as ReportName, b.reportid,count(reportid) as count 
+from reportserver..notifications b
+inner join dbo.Catalog c with (nolock) on b.ReportID = c.ItemID
+group by reportid,c.name order by count desc
+
+--------------
+
+select * from reportserver.[dbo].[DataSource] --where Name = 'DS_ProductCount'
+select * from reportserver.[dbo].[Catalog] where ItemID = 'C5D84AE9-533B-49F3-8E33-C4DF12271313'--RF_BALANCE_API_REPORT_OFFLINE
+select * from reportserver.[dbo].[Catalog] where ItemID = 'B7F520FF-EBB2-44E7-9DC4-1F687152172B'--Cash_Payment_Authorization_Pending_Report
+select * from reportserver.[dbo].[Catalog] where ItemID = '33859E2E-6A89-474A-9D82-875CEA9F5841'--Todays_DO_DM_Report
+select * from reportserver.[dbo].[Catalog] where ItemID = 'F9C24F32-AC30-486C-81B5-6D0E98C29EEE'--IMPS_DATA_REPORT.v2
+select * from reportserver.[dbo].[Catalog] where ItemID = 'DFB679EC-627C-4E84-A8EC-98FFA73EA0F3'--Deal_LAN
+
+USE ReportServer
+SELECT 
+ReportID,e.name AS ReportName, TimeStart, TimeEnd, TimeDataRetrieval, TimeProcessing, TimeRendering, TimeDataRetrieval + TimeProcessing + TimeRendering AS TotalRenderingTime
+FROM dbo.ExecutionLog a JOIN dbo.Catalog e ON e.itemid = a.reportid
+ORDER BY TimeStart DESC
+
+
+----------------------------------------------------Check Blocking Tree ---------------------------------------------------------------
+
+BEGIN
+	IF OBJECT_ID('tempdb..#T') IS NOT NULL
+		DROP TABLE #T;
+
+	SELECT SPID
+		,BLOCKED
+		,REPLACE(REPLACE(T.TEXT, CHAR(10), ' '), CHAR(13), ' ') AS BATCH
+	INTO #T
+	FROM sys.sysprocesses R
+	CROSS APPLY sys.dm_exec_sql_text(R.SQL_HANDLE) T;
+
+	WITH BLOCKERS (
+		SPID
+		,BLOCKED
+		,LEVEL
+		,BATCH
+		)
+	AS (
+		SELECT SPID
+			,BLOCKED
+			,CAST(REPLICATE('0', 4 - LEN(CAST(SPID AS VARCHAR))) + CAST(SPID AS VARCHAR) AS VARCHAR(1000)) AS LEVEL
+			,BATCH
+		FROM #T R
+		WHERE (
+				BLOCKED = 0
+				OR BLOCKED = SPID
+				)
+			AND EXISTS (
+				SELECT *
+				FROM #T R2
+				WHERE R2.BLOCKED = R.SPID
+					AND R2.BLOCKED <> R2.SPID
+				)
+		--
+		
+		UNION ALL
+		
+		--
+		SELECT R.SPID
+			,R.BLOCKED
+			,CAST(BLOCKERS.LEVEL + RIGHT(CAST((1000 + R.SPID) AS VARCHAR(100)), 4) AS VARCHAR(1000)) AS LEVEL
+			,R.BATCH
+		FROM #T AS R
+		INNER JOIN BLOCKERS ON R.BLOCKED = BLOCKERS.SPID
+		WHERE R.BLOCKED > 0
+			AND R.BLOCKED <> R.SPID
+		)
+	SELECT N'    ' + REPLICATE(N'|         ', LEN(LEVEL) / 4 - 1) + CASE 
+			WHEN (LEN(LEVEL) / 4 - 1) = 0
+				THEN 'HEAD -  '
+			ELSE '|------  '
+			END + CAST(SPID AS NVARCHAR(10)) + N' ' + BATCH AS BLOCKING_TREE
+	FROM BLOCKERS
+	ORDER BY LEVEL ASC;
+END
+
+----------------------------------------------------Check Error Logs for report server ---------------------------------------------------------------
+
+
+select datediff(MINUTE,TimeStart,TimeEnd) duration,* from ExecutionLog3 where timestart between '2019-01-21 01:55:00.00' and '2019-01-21 02:10:00.000'
+order by duration desc
+
+
+select datediff(MINUTE,TimeStart,TimeEnd) duration,* from ExecutionLog3 where timestart > '2019-01-21 07:00:00.00' --and '2019-01-19 9:30:00.000' 
+and status != 'rsSuccess' 
+order by duration descrestore
+
+
+select *
+--,distinct ItemPath
+from ExecutionLog3 where timestart > '2019-01-21 08:00:00.00' --and '2019-01-19 9:30:00.000' 
+and status <> 'rsSuccess'  
+
+
+
+select RequestType,datepart(hour,timestart) starttime, count(*) reportcount from ExecutionLog3 
+where timestart > '2019-01-19 08:00:00.000' --and '2019-01-19 9:30:00.000' 
+group by RequestType,datepart(hour,timestart) order by 2 desc
+
+
+
+--select RequestType,datepart(hour,timestart), count(*) from ExecutionLog3 
+--where timestart between '2019-01-16 09:00:51.46' and '2019-01-16 14:30:51.460' group by RequestType,datepart(hour,timestart)  order by 2 desc
+
+
+select count(1) from reportserver..notifications
+at: - 020-33219256/9306 OR +91-9372005896
+SELECT d.SubscriptionID,e.name AS ReportName,e.path AS ReportPath,d.LastStatus,d.LastRunTime,u.UserName 
+FROM dbo.Subscriptions d JOIN dbo.Users AS u ON d.ownerid = u.UserID JOIN dbo.Catalog e ON itemid = report_oid
+--WHERE d.LastStatus like '%Fail%' 
+--where e.name like 'admin%'-- Summary_Admin','Dedupe_Dashboard','RCD_Femi_percentage')
+order by d.LastRunTime desc
+ 
+sp_rpt 'DPD_Report_LAP'
+
+sp_get_queryplan
+exec sql_management..sp_whopro 'session_id in (473)', 'detailed'
+
+select * from Notifications
+
+SELECT d.SubscriptionID,e.name AS ReportName,e.path AS ReportPath,d.LastStatus,d.LastRunTime,u.UserName 
+FROM dbo.Subscriptions d JOIN dbo.Users AS u ON d.ownerid = u.UserID JOIN dbo.Catalog e ON itemid = report_oid
+--WHERE d.LastStatus like '%Fail%' 
+--where e.name in ('wallet_do_dump','Dedupe_Dashboard','RCD_Femi_percentage')
+order by d.LastRunTime desc
+
+--------check report status
+
+Use ReportServer  
+select * from ExecutionLog3 
+where TimeStart > '2019-01-17 19:29:08.030'-- and Status='rsInvalidDataSourceCredentialSetting'
+-- itempath='/BIU_REPORTS/BI_INSIGHTS/Fraud_prevention_report' 
+order by TimeStart DESC
+
+Query shared by ms
+
+SELECT [InstanceName]    --------details report history
+      ,[ItemPath]
+      ,[UserName]
+      ,[ExecutionId]
+      ,[RequestType]
+      ,[Format]
+      ,[Parameters]
+      ,[ItemAction]
+      ,[TimeStart]
+      ,[TimeEnd]
+      ,[TimeDataRetrieval]
+      ,[TimeProcessing]
+      ,[TimeRendering]
+      ,[Source]
+      ,[Status]
+      ,[ByteCount]
+      ,[RowCount]
+      ,[AdditionalInfo]
+  FROM [ReportServer].[dbo].[ExecutionLog3] where ItemPath='/RURAL_CREDIT_OPS_RPT/CREDIT/CALL_PROC' order by TimeStart desc
+  
+ -----------shared by ms 
+
+select datediff(MINUTE,TimeStart,TimeEnd) duration,* from ExecutionLog3 where timestart between '2019-01-19 01:00:51.46' and '2019-01-19 05:00:51.460' order by duration desc
+
+
+select datediff(MINUTE,TimeStart,TimeEnd) duration,* from ExecutionLog3 where timestart between '2019-01-18 09:00:51.46' and '2019-01-18 14:00:51.460' 
+and status = 'rsSuccess' 
+order by duration desc
+
+
+select distinct ItemPath from ExecutionLog3 where timestart between '2019-01-18 09:00:51.46' and '2019-01-18 14:00:51.460' 
+and status <> 'rsSuccess'  
+
+
+
+select RequestType,datepart(hour,timestart) starttime, count(*) reportcount from ExecutionLog3 
+where timestart between '2019-01-18 09:00:51.46' and '2019-01-18 14:30:51.460' group by RequestType,datepart(hour,timestart) order by 2 desc
+
+
+
+select RequestType,datepart(hour,timestart), count(*) from ExecutionLog3 
+where timestart between '2019-01-16 09:00:51.46' and '2019-01-16 14:30:51.460' group by RequestType,datepart(hour,timestart)  order by 2 desc
+
+
+-----------------------------------------------------------Update stat for whole database----------------------------------------------------------------------
+
+USE DM_BAFL -- Change desired database name here
+GO
+SET NOCOUNT ON
+GO
+DECLARE updatestats CURSOR FOR
+SELECT table_name FROM information_schema.tables
+	where TABLE_TYPE = 'BASE TABLE'
+OPEN updatestats
+
+DECLARE @tablename NVARCHAR(128)
+DECLARE @Statement NVARCHAR(300)
+
+FETCH NEXT FROM updatestats INTO @tablename
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+   PRINT N'UPDATING STATISTICS ' + @tablename
+   SET @Statement = 'UPDATE STATISTICS '  + @tablename + '  WITH FULLSCAN'
+   EXEC sp_executesql @Statement
+   FETCH NEXT FROM updatestats INTO @tablename
+END
+
+CLOSE updatestats
+DEALLOCATE updatestats
+GO
+SET NOCOUNT OFF
+GO
+
+------------------------------------------------------------------Check Index fragmentation over database------------------------------------------------------------------------
+
+-- Script that reorganizes or rebuilds all indexes having an average fragmentation 
+-- percentage above a given threshold. It also works in the case
+-- where Availability Groups are enabled as it determines if the
+-- relevant databases are the primary replicas.
+--
+-- This script supports only SQL Server 2005 or later.
+-- Also, if you execute this script in a SQL Server 2005 instance 
+-- or later, any databases with compatibility level 2000 (80) or earlier
+-- will be automatically excluded from the index reorganization/rebuild process.
+----
+
+--Initial check - You must be SysAdmin
+DECLARE @isSysAdmin INT
+SET @isSysAdmin=(SELECT IS_SRVROLEMEMBER ('sysadmin'));
+
+--Initial check - You must be using SQL Server 2005 or later
+DECLARE @SQLServerVersion INT
+SET @SQLServerVersion=(SELECT CAST(LEFT(CAST(SERVERPROPERTY('ProductVersion') AS VARCHAR(50)),CHARINDEX('.',CAST(SERVERPROPERTY('ProductVersion') AS VARCHAR(50)))-1) AS INT));
+
+
+IF @isSysAdmin=1 AND @SQLServerVersion >= 9
+BEGIN 
+
+--
+-- Variable/parameters Declaration
+--
+DECLARE @dbname NVARCHAR(128);
+DECLARE @ReorganizeOrRebuildCommand NVARCHAR(MAX);
+DECLARE @dbid INT;
+DECLARE @indexFillFactor VARCHAR(5); 
+DECLARE @fragmentationThreshold VARCHAR(10);
+DECLARE @indexStatisticsScanningMode VARCHAR(20);
+DECLARE @verboseMode BIT;
+DECLARE @reportOnly BIT;
+DECLARE @sortInTempdb VARCHAR(3);
+DECLARE @isHadrEnabled BIT;
+DECLARE @databaseToCheck VARCHAR(250)
+DECLARE @dynamic_command NVARCHAR(1024);
+DECLARE @dynamic_command_get_tables NVARCHAR(MAX);
+
+--Initializations - Do not change
+SET @databaseToCheck=NULL;
+SET @dynamic_command = NULL;
+SET @dynamic_command_get_tables = NULL;
+SET @isHadrEnabled=0;
+
+SET NOCOUNT ON;
+
+---------------------------------------------------------
+--Set Parameter Values: You can change these (optional) -
+--Note: The script has default parameters set   -
+---------------------------------------------------------
+--if set to 1: it will just generate a report with the index reorganization/rebuild statements
+--if set to 0: it will reorganize or rebuild the fragmented indexes
+SET @reportOnly = 1;
+
+--optional: if not set (NULL), it will scann all databases
+--If name is set (i.e. 'testDB') it will just scan the given database
+--SET @databaseToCheck = 'REMI';
+SET @databaseToCheck = 'DM_BAFL';
+--maintains only the indexes that have average fragmentation percentage equal or higher from the given value
+SET @fragmentationThreshold = 15; 
+
+--fill factor - the percentage of the data page to be filled up with index data
+SET @indexFillFactor = 100; 
+
+--sets the scanning mode for index statistics 
+--available values: 'DEFAULT', NULL, 'LIMITED', 'SAMPLED', or 'DETAILED'
+SET @indexStatisticsScanningMode='SAMPLED';
+
+--if set to ON: sorts intermediate index results in TempDB 
+--if set to OFF: sorts intermediate index results in user database's log file
+SET @sortInTempdb='ON'; 
+
+--if set to 0: Does not output additional information about the index reorganization/rebuild process
+--if set to 0: Outputs additional information about the index reorganization/rebuild process
+SET @verboseMode = 0; 
+------------------------------
+--End Parameter Values Setup -
+------------------------------
+
+-- check if given database exists and if compatibility level >= SQL 2005 (90)
+IF @verboseMode=1
+ PRINT 'Checking if database '+@databaseToCheck+' exists and if compatibility level equals or greater 2005 (90)';
+
+ -- if given database does not exist, raise error with severity 20
+ -- in order to terminate script's execution
+IF @databaseToCheck IS NOT NULL
+BEGIN
+ DECLARE @checkResult INT
+ SET @checkResult=(SELECT COUNT(*) FROM master.sys.databases WHERE [name]=RTRIM(@databaseToCheck));
+ IF @checkResult<1
+  RAISERROR('Error executing index reorganization/rebuild script: Database does not exist' , 20, 1) WITH LOG;
+
+ DECLARE @checkResult2 INT
+ SET @checkResult=(SELECT [compatibility_level] FROM master.sys.databases WHERE [name]=RTRIM(@databaseToCheck));
+ IF @checkResult<90
+  RAISERROR('Error executing index reorganization/rebuild script: Only databases with SQL Server 2005 or later compatibility level are supported' , 20, 1) WITH LOG;  
+END
+
+IF @verboseMode=1
+ PRINT 'Initial checks completed with no errors.';
+
+-- Temporary table for storing index fragmentation details
+IF OBJECT_ID('tempdb..#tmpFragmentedIndexes') IS NULL
+BEGIN
+CREATE TABLE #tmpFragmentedIndexes
+    (
+      [dbName] sysname,
+      [tableName] sysname,
+   [schemaName] sysname,
+      [indexName] sysname,
+      [databaseID] SMALLINT ,
+      [objectID] INT ,
+      [indexID] INT ,
+      [AvgFragmentationPercentage] FLOAT,
+   [reorganizationOrRebuildCommand] NVARCHAR(MAX)
+    );
+END 
+
+-- Initialize temporary table
+DELETE FROM #tmpFragmentedIndexes;
+
+-- Validate parameters/set defaults
+IF @sortInTempdb NOT IN ('ON','OFF')
+SET @sortInTempdb='ON';
+
+-- Check if instance has AlwaysOn AGs enabled
+SET @isHadrEnabled=CAST((SELECT ISNULL(SERVERPROPERTY('IsHadrEnabled'),0)) AS BIT);
+
+-- if database not specified scan all databases
+IF @databaseToCheck IS NULL
+BEGIN
+DECLARE dbNames_cursor CURSOR
+FOR
+    SELECT  s.[name] AS dbName ,
+            s.database_id
+    FROM    master.sys.databases s            
+    WHERE   s.state_desc = 'ONLINE'
+            AND s.is_read_only != 1            
+            AND s.[name] NOT IN ( 'master', 'model', 'tempdb' )
+   AND s.[compatibility_level]>=90
+    ORDER BY s.database_id;    
+END 
+ELSE
+-- if database specified, scan only that database
+BEGIN
+DECLARE dbNames_cursor CURSOR 
+FOR
+    SELECT  s.[name] AS dbName ,
+            s.database_id
+    FROM    master.sys.databases s            
+    WHERE   s.state_desc = 'ONLINE'
+            AND s.is_read_only != 1                        
+   AND s.[name]=RTRIM(@databaseToCheck)    
+END 
+
+-- if Always On Availability Groups are enabled, check for primary databases
+-- (thus exclude secondary databases)
+IF @isHadrEnabled=1
+BEGIN
+
+DEALLOCATE dbNames_cursor;
+
+-- if database not specified scan all databases
+IF @databaseToCheck IS NULL
+BEGIN
+ DECLARE dbNames_cursor CURSOR
+ FOR
+  SELECT  s.[name] AS dbName ,
+    s.database_id
+  FROM    master.sys.databases s
+    LEFT JOIN master.sys.dm_hadr_availability_replica_states r ON s.replica_id = r.replica_id
+  WHERE   s.state_desc = 'ONLINE'
+    AND s.is_read_only != 1
+    AND UPPER(ISNULL(r.role_desc, 'NonHadrEnabled')) NOT LIKE 'SECONDARY'
+    AND s.[name] NOT IN ( 'master', 'model', 'tempdb' )
+    AND s.[compatibility_level]>=90 
+  ORDER BY s.database_id;    
+END
+ELSE
+-- if database specified, scan only that database
+BEGIN
+ DECLARE dbNames_cursor CURSOR
+ FOR
+  SELECT  s.[name] AS dbName ,
+    s.database_id
+  FROM    master.sys.databases s
+    LEFT JOIN master.sys.dm_hadr_availability_replica_states r ON s.replica_id = r.replica_id
+  WHERE   s.state_desc = 'ONLINE'
+    AND s.is_read_only != 1
+    AND UPPER(ISNULL(r.role_desc, 'NonHadrEnabled')) NOT LIKE 'SECONDARY'    
+    AND s.[name]=RTRIM(@databaseToCheck);  
+END 
+END 
+
+
+--
+-- For each database included in the cursor, 
+-- gather all tables that have indexes with 
+-- average fragmentation percentage equal or above @fragmentationThreshold
+--
+OPEN dbNames_cursor;
+FETCH NEXT FROM dbNames_cursor INTO @dbname, @dbid;
+WHILE @@fetch_status = 0
+    BEGIN   
+ 
+ --If verbose mode is enabled, print logs
+        IF @verboseMode = 1
+            BEGIN
+    PRINT ''
+                PRINT 'Gathering index fragmentation statistics for database: ['+ @dbname + '] with id: ' + CAST(@dbid AS VARCHAR(10));    
+            END;
+                   
+        SET @dynamic_command_get_tables = N'
+ USE [' + @dbname+ N'];
+ INSERT INTO #tmpFragmentedIndexes (
+  [dbName],
+  [tableName],
+  [schemaName],
+  [indexName],
+  [databaseID],
+  [objectID],
+  [indexID],
+  [AvgFragmentationPercentage],
+  [reorganizationOrRebuildCommand]  
+  )
+  SELECT
+     DB_NAME() as [dbName], 
+     tbl.name as [tableName],
+     SCHEMA_NAME (tbl.schema_id) as schemaName, 
+     idx.Name as [indexName], 
+     pst.database_id as [databaseID], 
+     pst.object_id as [objectID], 
+     pst.index_id as [indexID], 
+     pst.avg_fragmentation_in_percent as [AvgFragmentationPercentage],
+     CASE WHEN pst.avg_fragmentation_in_percent > 30 THEN 
+     ''ALTER INDEX [''+idx.Name+''] ON [''+DB_NAME()+''].[''+SCHEMA_NAME (tbl.schema_id)+''].[''+tbl.name+''] REBUILD WITH (FILLFACTOR = '+@indexFillFactor+', SORT_IN_TEMPDB = '+@sortInTempdb+', STATISTICS_NORECOMPUTE = OFF);''
+     WHEN pst.avg_fragmentation_in_percent > 5 AND pst.avg_fragmentation_in_percent <= 30 THEN 
+     ''ALTER INDEX [''+idx.Name+''] ON [''+DB_NAME()+''].[''+SCHEMA_NAME (tbl.schema_id)+''].[''+tbl.name+''] REORGANIZE;''     
+     ELSE
+     NULL
+     END
+  FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL , '''+@indexStatisticsScanningMode+''') as pst
+   INNER JOIN sys.tables as tbl ON pst.object_id = tbl.object_id
+   INNER JOIN sys.indexes idx ON pst.object_id = idx.object_id AND pst.index_id = idx.index_id
+  WHERE pst.index_id != 0  
+   AND pst.alloc_unit_type_desc IN ( N''IN_ROW_DATA'', N''ROW_OVERFLOW_DATA'')
+   AND pst.avg_fragmentation_in_percent >= '+ @fragmentationThreshold + '';
+        
+  -- if verbose  mode is enabled, print logs    
+  IF @verboseMode=1
+   BEGIN
+    PRINT 'Index fragmentation statistics script: ';    
+    PRINT @dynamic_command_get_tables;
+  END
+
+  -- gather index fragmentation statistics
+        EXEC (@dynamic_command_get_tables);
+       
+     -- bring next record from the cursor
+        FETCH NEXT FROM dbNames_cursor INTO @dbname, @dbid;
+    END;
+
+CLOSE dbNames_cursor;
+DEALLOCATE dbNames_cursor;
+
+------------------------------------------------------------
+
+-- if 'report only' mode is enabled
+IF @reportOnly=1
+BEGIN 
+ SELECT  dbName ,
+            tableName ,
+            schemaName ,
+            indexName ,            
+            AvgFragmentationPercentage ,
+            reorganizationOrRebuildCommand
+ FROM    #tmpFragmentedIndexes
+ ORDER BY AvgFragmentationPercentage DESC;
+END
+ELSE 
+-- if 'report only' mode is disabled, then execute 
+-- index reorganize/rebuild statements
+BEGIN 
+ DECLARE reorganizeOrRebuildCommands_cursor CURSOR
+ FOR
+    SELECT  reorganizationOrRebuildCommand
+  FROM #tmpFragmentedIndexes
+  WHERE reorganizationOrRebuildCommand IS NOT NULL
+  ORDER BY AvgFragmentationPercentage DESC;
+
+ OPEN reorganizeOrRebuildCommands_cursor;
+ FETCH NEXT FROM reorganizeOrRebuildCommands_cursor INTO @ReorganizeOrRebuildCommand;
+ WHILE @@fetch_status = 0
+  BEGIN   
+         
+   IF @verboseMode = 1
+   BEGIN
+     PRINT ''
+     PRINT 'Executing script:'     
+     PRINT @ReorganizeOrRebuildCommand
+   END
+          
+   EXEC (@ReorganizeOrRebuildCommand);          
+   FETCH NEXT FROM reorganizeOrRebuildCommands_cursor INTO @ReorganizeOrRebuildCommand;
+  END;
+
+ CLOSE reorganizeOrRebuildCommands_cursor;
+ DEALLOCATE reorganizeOrRebuildCommands_cursor;
+
+ PRINT ''
+ PRINT 'All fragmented indexes have been reorganized/rebuilt.'
+ PRINT ''
+END
+END 
+ELSE
+BEGIN
+ PRINT '';
+ PRINT 'Error: You need to be SysAdmin and use SQL Server 2005 or later in order to use this script.';
+ PRINT '';
+END
+--End of Script
+
+----------------------------------------------------------------CURRENT CHECK DB status--------------------------------------------------------------------------------------
+
+DECLARE @curr_tracefilename VARCHAR(500);
+DECLARE @base_tracefilename VARCHAR(500);
+DECLARE @indx INT;
+SELECT @curr_tracefilename = path FROM sys.traces WHERE is_default = 1;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SELECT @indx = PATINDEX('%\%', @curr_tracefilename) ;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SET @base_tracefilename = LEFT( @curr_tracefilename,LEN(@curr_tracefilename) - @indx) + '\log.trc';
+SELECT SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),36, PATINDEX('%executed%',TEXTData)-36) AS command
+, LoginName
+, StartTime
+,@@SERVERNAME as ServerName
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%found%',TEXTData) +6,PATINDEX('%errors %',TEXTData)-PATINDEX('%found%',TEXTData)-6)) AS errors
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%repaired%',TEXTData) +9,PATINDEX('%errors.%',TEXTData)-PATINDEX('%repaired%',TEXTData)-9)) repaired
+, SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%time:%',TEXTData)+6,PATINDEX('%hours%',TEXTData)-PATINDEX('%time:%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%hours%',TEXTData) +6,PATINDEX('%minutes%',TEXTData)-PATINDEX('%hours%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%minutes%',TEXTData) +8,PATINDEX('%seconds.%',TEXTData)-PATINDEX('%minutes%',TEXTData)-8) AS time
+FROM::fn_trace_gettable( @base_tracefilename, DEFAULT)
+WHERE EventClass = 22 AND SUBSTRING(TEXTData,36,12) = 'DBCC CHECKDB';
+
+-------------------Another One
+
+IF OBJECT_ID('tempdb..#DBCC_Out', 'U') IS NOT NULL DROP TABLE #DBCC_Out;
+IF OBJECT_ID('tempdb..#Out', 'U') IS NOT NULL DROP TABLE #Out;
+
+CREATE TABLE #DBCC_Out (ParentObject varchar(255), [Object] varchar(255), [Field] varchar(255), [Value] varchar(255))
+CREATE TABLE #Out ([DB_Name] varchar(255), [Last_DBCCCheckDB] datetime)
+
+EXECUTE sp_MSforeachdb 
+'
+ INSERT INTO #DBCC_Out EXECUTE (''DBCC DBINFO ( ''''?'''' ) WITH TABLERESULTS'')
+ INSERT INTO #Out ([DB_Name], [Last_DBCCCheckDB])
+ (SELECT ''?'', [Value] FROM #DBCC_Out WHERE [Field] = ''dbi_dbccLastKnownGood'');
+ TRUNCATE TABLE #DBCC_Out;
+'
+ DROP TABLE #DBCC_Out;
+ SELECT * FROM #Out;
+
+-----------------------------------------------------Disabled login IJP use----------------------------------------------------------------------------------------
+
+SELECT distinct Login_Name
+  FROM [SQL_Management].[dbo].[FLOGIN_DISABLED_USERS]
+  where Remarks='IJP User'
+  ----'User not logged in for more than 30 Days'
+  --'IJP User'
+  and disabled_date between '2018-11-01' and '2018-12-11'
+
+  -----------------------------------------------------------------------CHECK MISSING INDEX-----------------------------------------------------------------------------------
+  
+  SELECT 
+       migs.user_seeks as [Estimated Index Uses],
+       migs.avg_user_impact [Estimated Index Impact %],
+       migs.avg_total_user_cost[Estimated Avg Query Cost],    
+       db_name(mid.database_id) AS DatabaseID,
+       OBJECT_SCHEMA_NAME (mid.OBJECT_ID,mid.database_id) AS [SchemaName],
+       OBJECT_NAME(mid.OBJECT_ID,mid.database_id) AS [TableName],
+       'CREATE INDEX [IX_' + OBJECT_NAME(mid.OBJECT_ID,mid.database_id) + '_'
+       + REPLACE(REPLACE(REPLACE(ISNULL(mid.equality_columns,''),', ','_'),'[',''),']','') 
+       + CASE
+                     WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns IS NOT NULL 
+                     THEN '_'
+                     ELSE ''
+         END
+       + REPLACE(REPLACE(REPLACE(ISNULL(mid.inequality_columns,''),', ','_'),'[',''),']','')
+       + ']'
+       + ' ON ' + mid.statement
+       + ' (' + ISNULL (mid.equality_columns,'')
+       + CASE WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns 
+       IS NOT NULL THEN ',' ELSE
+       '' END
+       + ISNULL (mid.inequality_columns, '')
+       + ')'
+       + ISNULL (' INCLUDE (' + mid.included_columns + ') WITH (MAXDOP =?, FILLFACTOR=?, ONLINE=?, SORT_IN_TEMPDB=?);', '') AS [Create TSQL],
+       mid.equality_columns, 
+       mid.inequality_columns, 
+       mid.included_columns,
+       migs.unique_compiles,
+       migs.last_user_seek  
+FROM sys.dm_db_missing_index_group_stats AS migs WITH (NOLOCK)
+INNER JOIN sys.dm_db_missing_index_groups AS mig WITH (NOLOCK) ON migs.group_handle = mig.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details AS mid WITH (NOLOCK) ON mig.index_handle = mid.index_handle
+where db_name(mid.database_id)='CIBIL_WATCH' and migs.avg_user_impact>30
+ORDER BY [Estimated Index Uses] DESC OPTION (RECOMPILE);
+
+
+---------Missing Index on Recent Sessions 
+
+;WITH XMLNAMESPACES(DEFAULT N'http://schemas.microsoft.com/sqlserver/2004/07/showplan')       
+SELECT dec.usecounts, dec.refcounts, dec.objtype
+      ,dec.cacheobjtype, des.dbid, des.text      
+      ,deq.query_plan 
+FROM sys.dm_exec_cached_plans AS dec 
+     CROSS APPLY sys.dm_exec_sql_text(dec.plan_handle) AS des 
+     CROSS APPLY sys.dm_exec_query_plan(dec.plan_handle) AS deq 
+WHERE deq.query_plan.exist(N'/ShowPlanXML/BatchSequence/Batch/Statements/StmtSimple/QueryPlan/MissingIndexes/MissingIndexGroup') <> 0 
+ORDER BY dec.usecounts DESC
+
+-------------------Missing index on server
+
+WITH XMLNAMESPACES ('http://schemas.microsoft.com/sqlserver/2004/07/showplan'
+AS sp)
+ 
+SELECT DB_NAME(CAST(pa.value AS INT)) QueryDatabase
+    ,s.sql_handle
+    ,OBJECT_SCHEMA_NAME(st.objectid, CAST(pa.value AS INT)) AS ObjectSchemaName
+    ,OBJECT_NAME(st.objectid, CAST(pa.value AS INT)) AS ObjectName
+    ,SUBSTRING(st.text,s.statement_start_offset/2+1,
+            ((CASE WHEN s.statement_end_offset = -1 THEN DATALENGTH(st.text)
+                ELSE s.statement_end_offset END) - s.statement_start_offset)/2 + 1)  AS SqlText
+    ,s.total_elapsed_time
+    ,s.last_execution_time
+    ,s.execution_count
+    ,s.total_logical_writes
+    ,s.total_logical_reads
+    ,s.min_elapsed_time
+    ,s.max_elapsed_time
+    -- query_hash is useful for grouping similar queries with different parameters
+    --,s.query_hash
+    --,cast (p.query_plan as varchar(max)) query_plan
+    ,p.query_plan
+    ,mi.MissingIndex.value(N'(./@Database)[1]', 'NVARCHAR(256)') AS TableDatabase
+    ,mi.MissingIndex.value(N'(./@Table)[1]', 'NVARCHAR(256)') AS TableName
+    ,mi.MissingIndex.value(N'(./@Schema)[1]', 'NVARCHAR(256)') AS TableSchema
+    ,mi.MissingIndex.value(N'(../@Impact)[1]', 'DECIMAL(6,4)') AS ProjectedImpact
+    ,ic.IndexColumns
+    ,inc.
+
+FROM (  -- Uncomment the TOP & ORDER BY clauses to restrict the data and
+        -- reduce the query run time.
+        SELECT --TOP 200
+        s.sql_handle
+        ,s.plan_handle
+        ,s.total_elapsed_time
+        ,s.last_execution_time
+        ,s.execution_count
+        ,s.total_logical_writes
+        ,s.total_logical_reads
+        ,s.min_elapsed_time
+        ,s.max_elapsed_time
+        ,s.statement_start_offset
+        ,s.statement_end_offset
+        --,s.query_hash
+    FROM sys.dm_exec_query_stats s
+    -- ORDER BY s.total_elapsed_time DESC
+    ) AS s
+CROSS APPLY sys.dm_exec_text_query_plan(s.plan_handle,statement_start_offset,statement_end_offset) AS pp
+CROSS APPLY (SELECT CAST(pp.query_plan AS XML) AS query_plan ) AS p
+CROSS APPLY p.query_plan.nodes('/sp:ShowPlanXML/sp:BatchSequence/sp:Batch/sp:Statements/sp:StmtSimple/sp:QueryPlan/sp:MissingIndexes/sp:MissingIndexGroup/sp:MissingIndex')
+                AS mi (MissingIndex) 
+CROSS APPLY (SELECT STUFF((SELECT ', ' + ColumnGroupColumn.value('./@Name', 'NVARCHAR(256)')
+            FROM mi.MissingIndex.nodes('./sp:ColumnGroup')
+                AS t1 (ColumnGroup)
+            CROSS APPLY t1.ColumnGroup.nodes('./sp:Column') AS t2 (ColumnGroupColumn)
+            WHERE t1.ColumnGroup.value('./@Usage', 'NVARCHAR(256)') <> 'INCLUDE'
+            FOR XML PATH(''),TYPE).value('.','VARCHAR(MAX)'), 1, 2, '') AS IndexColumns ) AS ic 
+CROSS APPLY (SELECT STUFF((SELECT ', ' + ColumnGroupColumn.value('./@Name', 'NVARCHAR(256)')
+            FROM mi.MissingIndex.nodes('./sp:ColumnGroup')
+                AS t1 (ColumnGroup)
+            CROSS APPLY t1.ColumnGroup.nodes('./sp:Column') AS t2 (ColumnGroupColumn)
+            WHERE t1.ColumnGroup.value('./@Usage', 'NVARCHAR(256)') = 'INCLUDE'
+            FOR XML PATH(''),TYPE).value('.','VARCHAR(MAX)'), 1, 2, '') AS IncludedColumns ) AS inc 
+CROSS APPLY sys.dm_exec_plan_attributes(s.plan_handle) pa
+CROSS APPLY sys.dm_exec_sql_text (s.sql_handle) st
+WHERE pp.query_plan LIKE '%MissingIndexes%'
+  AND pa.attribute = 'dbid'
+  order by s.last_execution_time desc
+
+  
+-------------------------------------------------------------CHECK DUPLICATE INDEX--------------------------------------------------------------------------------------------
+
+WITH indexcols
+AS (
+        SELECT object_id AS id
+               ,index_id AS indid
+               ,NAME
+               ,(
+                       SELECT CASE keyno
+                                      WHEN 0
+                                              THEN NULL
+                                      ELSE colid
+                                      END AS [data()]
+                       FROM sys.sysindexkeys AS k
+                       WHERE k.id = i.object_id
+                               AND k.indid = i.index_id
+                       ORDER BY keyno
+                               ,colid
+                       FOR XML PATH('')
+                       ) AS cols
+               ,(
+                       SELECT CASE keyno
+                                      WHEN 0
+                                              THEN colid
+                                      ELSE NULL
+                                      END AS [data()]
+                       FROM sys.sysindexkeys AS k
+                       WHERE k.id = i.object_id
+                               AND k.indid = i.index_id
+                       ORDER BY colid
+                       FOR XML PATH('')
+                       ) AS inc
+        FROM sys.indexes AS i
+        )
+SELECT DB_NAME() AS 'DBName'
+        ,OBJECT_SCHEMA_NAME(c1.id) + '.' + OBJECT_NAME(c1.id) AS 'TableName'
+        ,c1.NAME + CASE c1.indid
+               WHEN 1
+                       THEN ' (clustered index)'
+               ELSE ' (nonclustered index)'
+               END AS 'IndexName'
+        ,c2.NAME + CASE c2.indid
+               WHEN 1
+                       THEN ' (clustered index)'
+               ELSE ' (nonclustered index)'
+               END AS 'ExactDuplicatedIndexName'
+FROM indexcols AS c1
+INNER JOIN indexcols AS c2 ON c1.id = c2.id
+        AND c1.indid < c2.indid
+        AND c1.cols = c2.cols
+        AND c1.inc = c2.inc;
+
+-------------------------------------------------------------HOW TO FIND COMPRESS TABLE LIST IN DB----------------------------------------------------------------------
+
+
+SELECT distinct st.name--, ix.name , st.object_id, sp.partition_id, sp.partition_number, sp.data_compression,sp.data_compression_desc
+FROM sys.partitions SP 
+INNER JOIN sys.tables ST ON st.object_id = sp.object_id 
+LEFT OUTER JOIN sys.indexes IX ON sp.object_id = ix.object_id and sp.index_id = ix.index_id
+WHERE sp.data_compression = 2
+
+------------------------------------------------------------------FIND MISSING INDEX IN DB--------------------------------------------------------------------------------
+
+SELECT 
+	migs.user_seeks as [Estimated Index Uses],
+	migs.avg_user_impact [Estimated Index Impact %],
+	migs.avg_total_user_cost[Estimated Avg Query Cost], 	
+	db_name(mid.database_id) AS DatabaseID,
+	OBJECT_SCHEMA_NAME (mid.OBJECT_ID,mid.database_id) AS [SchemaName],
+	OBJECT_NAME(mid.OBJECT_ID,mid.database_id) AS [TableName],
+	'CREATE INDEX [IX_' + OBJECT_NAME(mid.OBJECT_ID,mid.database_id) + '_'
+	+ REPLACE(REPLACE(REPLACE(ISNULL(mid.equality_columns,''),', ','_'),'[',''),']','') 
+	+ CASE
+			WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns IS NOT NULL 
+			THEN '_'
+			ELSE ''
+	  END
+	+ REPLACE(REPLACE(REPLACE(ISNULL(mid.inequality_columns,''),', ','_'),'[',''),']','')
+	+ ']'
+	+ ' ON ' + mid.statement
+	+ ' (' + ISNULL (mid.equality_columns,'')
+	+ CASE WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns 
+	IS NOT NULL THEN ',' ELSE
+	'' END
+	+ ISNULL (mid.inequality_columns, '')
+	+ ')'
+	+ ISNULL (' INCLUDE (' + mid.included_columns + ') WITH (MAXDOP =?, FILLFACTOR=?, ONLINE=?, SORT_IN_TEMPDB=?);', '') AS [Create TSQL],
+	mid.equality_columns, 
+	mid.inequality_columns, 
+	mid.included_columns,
+	migs.unique_compiles,
+	migs.last_user_seek	
+FROM sys.dm_db_missing_index_group_stats AS migs WITH (NOLOCK)
+INNER JOIN sys.dm_db_missing_index_groups AS mig WITH (NOLOCK) ON migs.group_handle = mig.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details AS mid WITH (NOLOCK) ON mig.index_handle = mid.index_handle
+where db_name(mid.database_id)='CIBIL_WATCH' and migs.avg_user_impact>30
+ORDER BY [Estimated Index Uses] DESC OPTION (RECOMPILE);
+
+
+------------------------------------------------CHECK RUNNING SESSION AT SPECIFIC TIME---------------------------------------------------------------------------
+
+exec sql_management..sp_whopro null,'s.login_time,sql, wait, block, locks, limited',null,'sql_management','2019-01-08 19:00:00.993','2019-01-08 20:10:38.993'
+
+
+-----------------------------------------------------------Always-on file movement on secondary---------------------------------------------------------
+ 
+-----BFL_ODS logfile movement on 10.156.32.7 server 
+--1 change routing on 32.4 server 
+--USE [master]
+--GO
+--ALTER AVAILABILITY GROUP [ODS_AG_01]
+--MODIFY REPLICA ON N'UNICA-PROD-DB01' WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = (N'UNICA-PROD-DB01')))
+--GO
+--2   Set secondary (32.7) allow_connection 'NO'
+--USE [master]
+--GO
+--ALTER AVAILABILITY GROUP [ODS_AG_01]
+--MODIFY REPLICA ON N'UNICA-PROD-DB2' WITH (SECONDARY_ROLE(ALLOW_CONNECTIONS = NO))
+--GO
+--3  Restart listaner
+--4  Check all connection and any opentransactions on Database
+--5  modify database file 
+--select * from sysaltfiles
+--Change data file path by using  alter command on respective servers secondary :-                                                     
+--ALTER DATABASE bajaj MODIFY FILE (name='bajaj',filename='L:\Datafiles\bajaj_new.mdf');
+--ALTER DATABASE DM_STAGING MODIFY FILE (name='DM_STAGING',filename='L:\Datafiles\DM_STAGING.mdf');
+-- 6  Stop SQL services or make DB offline if standalone (use rollbackimmediate)
+-- 7   Copy file from source drive to Destination drive
+-- 8   Start SQL services or Make online DB
+-- 9   Check error log and always on status
+-- 10  Change rounting on primary server (32.4)
+--USE [master]
+--GO
+--ALTER AVAILABILITY GROUP [ODS_AG_01]
+--MODIFY REPLICA ON N'UNICA-PROD-DB01' WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = (N'UNICA-PROD-DB01','UNICA-PROD-DB02')))
+--GO
+--11   Set secondary (32.7) allow_connection 'read_intent_only'
+--     --USE [master]
+--     --GO
+--     --ALTER AVAILABILITY GROUP [ODS_AG_01]
+--     --MODIFY REPLICA ON N'UNICA-PROD-DB2' WITH (SECONDARY_ROLE(ALLOW_CONNECTIONS = read_intent_only))
+--     --GO 
+
+
+https://www.sqlserverblogforum.com/2016/08/alwayson-move-database-without-breaking-hadr/  ---------------Always on file movement on secondary
+
+
+--------------------------------------------------FIND out number of connection on specific database------------------------------------------------------------------
+
+SELECT 
+    DB_NAME(dbid) as DBName, COUNT(dbid) as NumberOfConnections, loginame as LoginName, hostname as hostname 
+	FROM sys.sysprocesses 
+	WHERE  dbid > 0  GROUP BY dbid, loginame, hostname 	
+	order by NumberOfConnections desc;
+
+
+
+-----------------------------------------------------------------CHECK ALWAYS ON HELTH STATUS-----------------------------------------------------------------------------------------
+
+SELECT        -- 2016-06-20 03:55:13.810       2016-06-20 04:15:44.390
+		   ar.replica_server_name, 
+		   adc.database_name, 
+		   drs.last_commit_time,
+		   ag.name AS ag_name, 
+		   drs.is_local,
+		   drs.synchronization_state_desc, 
+		   drs.is_commit_participant, 
+		   drs.synchronization_health_desc,
+		   drs.log_send_queue_size, 
+		   drs.log_send_rate, 
+		   drs.redo_queue_size,  
+		   drs.recovery_lsn, 
+		   drs.truncation_lsn, 
+		   drs.last_sent_lsn, 
+		   drs.last_sent_time, 
+		   drs.last_received_lsn, 
+		   drs.last_received_time, 
+		   drs.last_hardened_lsn, 
+		   drs.last_hardened_time, 
+		   drs.last_redone_lsn, 
+		   drs.last_redone_time, 
+		   drs.redo_rate, 
+		   drs.filestream_send_rate, 
+		   drs.end_of_log_lsn, 
+		   drs.last_commit_lsn
+	FROM sys.dm_hadr_database_replica_states AS drs
+	INNER JOIN sys.availability_databases_cluster AS adc 
+		   ON drs.group_id = adc.group_id AND 
+		   drs.group_database_id = adc.group_database_id
+INNER JOIN sys.availability_groups AS ag
+       ON ag.group_id = drs.group_id
+INNER JOIN sys.availability_replicas AS ar 
+       ON drs.group_id = ar.group_id AND 
+       drs.replica_id = ar.replica_id
+	  -- where datediff(mi,last_commit_time,getdate()) > 30 
+ORDER BY ag.name, adc.database_name, ar.replica_server_name
+;
+go
+
+-----------------------------------------------------RUNNING BKP OR RESTORTION DATABASE STSTUS ETC------------------------------------------------------------------------------
+
+SELECT r.session_id,r.command,CONVERT(NUMERIC(6,2),r.percent_complete)
+AS [Percent Complete],CONVERT(VARCHAR(20),DATEADD(ms,r.estimated_completion_time,GetDate()),20) AS [ETA Completion Time],
+CONVERT(NUMERIC(10,2),r.total_elapsed_time/1000.0/60.0) AS [Elapsed Min],
+CONVERT(NUMERIC(10,2),r.estimated_completion_time/1000.0/60.0) AS [ETA Min],
+CONVERT(NUMERIC(10,2),r.estimated_completion_time/1000.0/60.0/60.0) AS [ETA Hours],
+CONVERT(VARCHAR(1000),(SELECT SUBSTRING(text,r.statement_start_offset/2,
+CASE WHEN r.statement_end_offset = -1 THEN 1000 ELSE (r.statement_end_offset-r.statement_start_offset)/2 END)
+FROM sys.dm_exec_sql_text(sql_handle)))
+FROM sys.dm_exec_requests r WHERE command IN ('RESTORE DATABASE','BACKUP DATABASE','RESTORE LOG','BACKUP LOG')
+
+
+-----------------------------------------------------CHECK FREE SPACE IN FILE------------------------------------------------------------------------------
+
+select  a.FILEID,  [FILE_SIZE_MB] =   convert(decimal(12,2),round(a.size/128.000,2)),
+[SPACE_USED_MB] =  convert(decimal(12,2),round(fileproperty(a.name,'SpaceUsed')/128.000,2)),
+[FREE_SPACE_MB] =   convert(decimal(12,2),round((a.size-fileproperty(a.name,'SpaceUsed'))/128.000,2)) ,
+NAME = left(a.NAME,15),  FILENAME = left(a.FILENAME,60) from  dbo.sysfiles a
+
+
+-----------------------------------------------------GRANT PERMISSION ON CMDSHELL TO USER------------------------------------------------------------------------------
+
+GRANT EXECUTE ON xp_cmdshell TO [BFL\appsupport]
+
+-----------------------------------------------------CHECK BACKUP STATUS------------------------------------------------------------------------------
+
+SELECT top 100 p.database_name AS DatabaseName,
+p.backup_start_date AS 'Backup Start Time',
+p.backup_finish_date AS 'Backup Finish Time',
+CAST((DATEDIFF(MINUTE, p.backup_start_date, p.backup_finish_date)) AS varchar)+ ' min  '+ CAST((DATEDIFF(ss, p.backup_start_date, p.backup_finish_date)) AS varchar) + ' sec ' AS [Total Time] ,
+CASE p.type
+WHEN 'D' THEN 'Full '
+WHEN 'I' THEN 'Diffrential'
+WHEN 'L' THEN 'Log'
+END AS 'Backup Type',
+Cast(p.backup_size/1024/1024 AS numeric(10,2)) AS 'Backup Size(MB)' ,
+a.physical_device_name AS 'Physical File location'
+FROM msdb..backupmediafamily a,
+msdb..backupset p
+WHERE a.media_set_id=p.media_set_id and p.type in ('D') 
+--and p.database_name in ('bridgei2i')
+--and p.database_name in ('B2B_RCS_AZ','DM_BAFLAZ','EMICARD_DB','MOBILE','ODM')
+--and a.physical_device_name not like '\\BFLAZODMDBPRM%'
+order by p.backup_finish_date desc
+
+---------------------
+
+select   a.server_name, a.database_name, backup_finish_date, a.backup_size,
+CASE a.[type] -- Let's decode the three main types of backup here
+ WHEN 'D' THEN 'Full'
+ WHEN 'I' THEN 'Differential'
+ WHEN 'L' THEN 'Transaction Log'
+ ELSE a.[type]
+END as BackupType
+ ,b.physical_device_name
+from msdb.dbo.backupset a join msdb.dbo.backupmediafamily b
+  on a.media_set_id = b.media_set_id
+where 
+--a.database_name Like 'ARUMART%' and
+ a.[type]='D'
+order by a.backup_finish_date desc
+
+--------------------------------------------------------GET RUNNING JOB WITH SPID----------------------------------------------------------------------------------------
+
+select a.session_id, b.job_id, b.name
+from sys.dm_exec_sessions a
+inner join msdb.dbo.sysjobs b on b.job_id = cast(convert( binary(16), substring(a.program_name , 30, 34), 1) as uniqueidentifier)
+where program_name like 'SQLAgent - TSQL JobStep (Job % : Step %)'
+
+------------------------------------------------------FIND ALL PERMISSION OF USER------------------------------------------------------------------------------------------
+
+sp_DBPermissions @DBName = N'SSISDB',@LoginName='BFL\shobhitmisra'
+
+----------------------------------------------------------EXECUTE AS SPECIFIC LOGIN--------------------------------------------------------------------------------------
+
+SELECT SUSER_NAME(),USER_NAME();	-----own user info
+ 
+EXECUTE AS LOGIN ='BFL\rishityagi'; -----who you want to connect
+ 
+SELECT SUSER_NAME(),USER_NAME();	-----see yo connected as that user
+ 
+revert	                             -------------------rollback
+
+------------------------------------------------------------------KILL ALL SESSION AT A TIME(SPECIFIC LOGIN)------------------------------------------------------------------
+
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql += N'KILL ' + CONVERT(VARCHAR(11), session_id) + N';'
+FROM sys.dm_exec_sessions
+WHERE  --[program_name] = N'program_name'
+    --login_name = N'DMS_USER'  or
+	 	login_name = N'azureadmin'-- or 
+		AND status='dormant'
+ 	--login_name = N'BFL\mossssrs' or
+	 --	login_name = N'campaign_user' or
+  --login_name = N'etl_user'
+EXEC sys.sp_executesql @sql;
+
+--------------------------------------------------------------KILL CMDSHELL SESSION------------------------------------------------------------------------------------------------
+
+sp_whoisactive 2681
+dbcc inputbuffer(334)--exec CAMPAIGNMGMT..[INS_SOA_CLICK]
+EXEC xp_CmdShell 'WMIC PROCESS WHERE (Name like "%cmd.exe%" AND CommandLine LIKE "%DBAmp.exe%") GET ProcessId,  CommandLine'
+--EXEC xp_CmdShell 'taskkill /f /t /fi "pid eq 51756"'
+
+-------------------------------------------------------------------BASIC COMMAND -------------------------------------------------------------------------------------------
+
+ dbcc opentran('DM_BAFL')----------------- TO KNOW ANY TRANSACTION ON THIS DATABASE OR NOT
+
+ MSDB..sp_help_job -----------------------------GIVE ALL JOBS INFO ABOUT SERVER
+
+ sp_whoisactive 788   -------------------TO SEE WHO IS ACTIVE,QUERY PLAN,LOGIN NAME,ETC...----------------------
+
+ sp_target 	143       -------------------TO SEE ALL INFORMATION ABOUT SESSION,ETC...-------------------
+
+ sql_management..sp_runningjob ----------TO KNOW RUNNING JOBS
+
+ sp_get_jobname B0A00D24-D92D-473B-9A05-3949382E1965 ---->JOB ID -----------TO GET JOB NAME
+
+ sql_management..sp_jobhistory 'ELITE_CARD_GEN'  ----> (job name)----TO GET JOB HISTORY
+
+ sp_get_blocking ---------------------------------------TO SEE WHO IS BLOCKING---------------------
+
+ sp_get_memory_usage -----------------------------------TO SEE QUERY COST -----------------------------------
+
+ sp_helpdb sql_management-------------------------------DB NAME,SIZE,OWNER,STATUS,IDCOMPATIBILITY LEVEL--------------------------
+
+ xp_fixeddrives ----------------------------------------TO SEE THE SIZE OF ALL DRIVES---------------
+
+ dbcc sqlperf(logspace)  -------------------------------TO SEE LOG SIZE AND USAGE IN % ---------------
+
+ sp_helptext -------------------------------------------TO GET QUERY LINE BY LINE--------------------------------
+
+ sql_management..sp_fconn-------------------------------TO SEE NUMBER OF CONNECTIONS TO DATABASE AND LOGIN NAME--------------------
+
+ sql_management..sp_FGetIdleSessions 120--->Minutes-----TO DELETE KILL SESSIONS WHO ARE MORE THAN SPECIFIED TIME---------------
+
+ sql_management..sp_whoi2 ------------------------------TO SEE STATUS, LOGIN,JOBS, DB NAME, CPU TIME, COMMAND,.HOST NAME,...ETC..-------------------------------------
+
+ sp_linkedservers---------------------------------------TO GET LINK INFORMATION ABOUT LINKED SEVERS ------
+
+ use msdb select * from msdb..VW_Job_Status_Failed where LastRunStatus <>'Succeeded'  -------------SHOW IF BACKUP LAN FAIL OR WHAT----------
+
+ EXEC sql_management..sp_fconn --------------------------TO SEE NO. OF ACTIVE CONNECTION
+
+ select * from sys.master_files----------------- TO KONW LOGICAL AND PHYSICAL NAMES OF FILES
+
+use msdb
+select * from msdb..VW_Job_Status_Failed where LastRunStatus <>'Succeeded'---------------------- TO KNOW FAILED JOB 
+
+xp_readerrorlog ------------------------TO READ ERROR LOG
+
+select * from sys.databases -----------SHOW ALL DATABASES
+
+GRANT ADMINISTER BULK OPERATIONS TO [BFL\appsupport]--BULK INSERT permission on a Server
+
+-- For single Database give permission as Below
+
+Use [master]; GRANT Showplan TO [BFL\vniazanapuram]  ---showplan permission (db level)
+
+----------at time on all db
+
+ EXEC sp_MSforeachdb N'IF EXISTS
+(
+SELECT 1 FROM sys.databases WHERE name = "?"
+AND Is_read_only <> 1
+)
+BEGIN
+print "Use [?]; GRANT Showplan TO [BFL\babasahebgoswami]"
+END';
+
+--Server State---
+
+GRANT VIEW SERVER STATE to "BFL\manishvattoliparambi";  --server state permission (server level)
+
+-- Locking Information
+SELECT * FROM sys.dm_tran_locks
+GO
+-- Cache Status
+SELECT * FROM sys.dm_os_memory_cache_counters 
+GO
+-- Active Sessions
+SELECT * FROM sys.dm_exec_sessions 
+GO
+-- Requests Status
+SELECT * FROM sys.dm_exec_requests
+GO
+
+------------------------------------------to create CREDENTIALS on AZURE---------------------------------------------------------------------------------------
+
+USE master  
+CREATE CREDENTIAL [azurebackups4] -- this name must match the container path, start with https and must not contain a forward slash.  
+WITH IDENTITY='odssqlbackup' -- this is a mandatory string and do not change it.   
+, SECRET = 'JhTXOaT8q5Snt6sAh1Ike64qj7HZPmHtiR/M/jpjPmH4wmvzFg+SmN+6IfLs8NhpEG6nkbH79yx3PKrhosWmnw==' -- this is the shared access signature key.   
+GO 
+
+---------------------------------------------------------ALWAYS ON DELAY STEPS-----------------------------------------------------------------------------------------------------
+
+-- STEP 1--APPLY ON THE DELAYED SEREVR
+
+select DB_name(database_id), wait_type, wait_time, blocking_session_id, wait_time/1024 wait_Insec, wait_resource,
+* from sys.dm_exec_requests where command = 'db startup'
+
+-- STEP 2
+
+---NOTE : If you occur parallel_redo_flow_control and dirty_page_table_lock parallel_drain_redo_worker WAIT TYPE in ALWAYSON then redo queue size increases
+
+--Enable trace flag           DBCC TRACEON (3459, -1) --------APPLY 
+			 				  DBCC TRACEOFF (3459, -1)  ------APPLY AFTER IT COMES INTO SYNK
+                              DBCC TRACESTATUS
+
+---------------------------------------------CHECK BACKUP DETAILS FOR ALL DATABASES-----------------------------------------------------------------------------------------
+
+SET NOCOUNT ON
+GO
+SET quoted_identifier OFF
+DECLARE @dbname AS VARCHAR(80)
+DECLARE @msgdb AS VARCHAR(100)
+DECLARE @dbbkpname AS VARCHAR(80)
+DECLARE @dypart1 AS VARCHAR(2)
+DECLARE @dypart2 AS VARCHAR(3)
+DECLARE @dypart3 AS VARCHAR(4)
+DECLARE @currentdate AS VARCHAR(10)
+DECLARE @server_name AS VARCHAR(30)
+SELECT @server_name = @@servername
+SELECT @dypart1 = DATEPART(dd,GETDATE())
+SELECT @dypart2 = DATENAME(mm,GETDATE())
+SELECT @dypart3 = DATEPART(yy,GETDATE())
+SELECT @currentdate= @dypart1 + @dypart2 + @dypart3
+PRINT "#################################################################"
+PRINT "# SERVERNAME : "+ @server_name + " DATE : "+ @currentdate +"#"
+PRINT "#################################################################"
+PRINT "DatabaseName Full Diff TranLog"
+PRINT "#################################################################"
+
+SELECT SUBSTRING(s.name,1,50) AS 'DATABASE Name',
+b.backup_start_date AS 'Full DB Backup Status',
+c.backup_start_date AS 'Differential DB Backup Status',
+d.backup_start_date AS 'Transaction Log Backup Status'
+into #temp
+FROM MASTER..sysdatabases s
+LEFT OUTER JOIN msdb..backupset b
+ON s.name = b.database_name
+AND b.backup_start_date =
+(SELECT MAX(backup_start_date)AS 'Full DB Backup Status'
+FROM msdb..backupset
+WHERE database_name = b.database_name
+AND TYPE = 'D') -- full database backups only, not log backups
+LEFT OUTER JOIN msdb..backupset c
+ON s.name = c.database_name
+AND c.backup_start_date =
+(SELECT MAX(backup_start_date)'Differential DB Backup Status'
+FROM msdb..backupset
+WHERE database_name = c.database_name
+AND TYPE = 'I')
+LEFT OUTER JOIN msdb..backupset d
+ON s.name = d.database_name
+AND d.backup_start_date =
+(SELECT MAX(backup_start_date)'Transaction Log Backup Status'
+FROM msdb..backupset
+WHERE database_name = d.database_name
+AND TYPE = 'L')
+WHERE s.name <>'tempdb'
+ORDER BY b.backup_start_date desc
+
+
+select * from #temp
+--where cast([full db backup status] as date)<= DATEADD(dd, -5, cast(getdate() as date))
+where cast([Full DB Backup Status] as date)<= DATEADD(dd, -5, cast(getdate() as date))
+order by [Differential DB Backup Status] desc
+drop table #temp
+
+
+GO
+----Without temp table for all databse 
+--SET quoted_identifier OFF
+--DECLARE @dbname AS VARCHAR(80)
+--DECLARE @msgdb AS VARCHAR(100)
+--DECLARE @dbbkpname AS VARCHAR(80)
+--DECLARE @dypart1 AS VARCHAR(2)
+--DECLARE @dypart2 AS VARCHAR(3)
+--DECLARE @dypart3 AS VARCHAR(4)
+--DECLARE @currentdate AS VARCHAR(10)
+--DECLARE @server_name AS VARCHAR(30)
+--SELECT @server_name = @@servername
+--SELECT @dypart1 = DATEPART(dd,GETDATE())
+--SELECT @dypart2 = DATENAME(mm,GETDATE())
+--SELECT @dypart3 = DATEPART(yy,GETDATE())
+--SELECT @currentdate= @dypart1 + @dypart2 + @dypart3
+--PRINT "#################################################################"
+--PRINT "# SERVERNAME : "+ @server_name + " DATE : "+ @currentdate +"#"
+--PRINT "#################################################################"
+--PRINT "DatabaseName Full Diff TranLog"
+--PRINT "#################################################################"
+-----------------------------------------------------------------------------------------------------------------------
+--SELECT SUBSTRING(s.name,1,50) AS 'DATABASE Name',
+--b.backup_start_date AS 'Full DB Backup Status',
+--c.backup_start_date AS 'Differential DB Backup Status',
+--d.backup_start_date AS 'Transaction Log Backup Status'
+----into #temp
+--FROM MASTER..sysdatabases s
+--LEFT OUTER JOIN msdb..backupset b
+--ON s.name = b.database_name
+--AND b.backup_start_date =
+--(SELECT MAX(backup_start_date)AS 'Full DB Backup Status'
+--FROM msdb..backupset
+--WHERE database_name = b.database_name
+--AND TYPE = 'D') -- full database backups only, not log backups
+--LEFT OUTER JOIN msdb..backupset c
+--ON s.name = c.database_name
+--AND c.backup_start_date =
+--(SELECT MAX(backup_start_date)'Differential DB Backup Status'
+--FROM msdb..backupset
+--WHERE database_name = c.database_name
+--AND TYPE = 'I')
+--LEFT OUTER JOIN msdb..backupset d
+--ON s.name = d.database_name
+--AND d.backup_start_date =
+--(SELECT MAX(backup_start_date)'Transaction Log Backup Status'
+--FROM msdb..backupset
+--WHERE database_name = d.database_name
+--AND TYPE = 'L')
+--WHERE s.name <>'tempdb'
+--ORDER BY b.backup_start_date desc
+
+---------------------------------------------------TRUNCATE ALL LOG FILE IN EMEGENCY-------------------------------------------------------------------------
+
+SELECT
+      'USE [' + d.name + N']' + CHAR(13) + CHAR(10)
+    + 'DBCC SHRINKFILE (N''' + mf.name + N''' , 0, TRUNCATEONLY)'
+    + CHAR(13) + CHAR(10) + CHAR(13) + CHAR(10) 
+FROM
+         sys.master_files mf
+    JOIN sys.databases d
+        ON mf.database_id = d.database_id 
+WHERE d.database_id > 4 and mf.type_desc = 'LOG'
+
+----------------------------------------------------------CHECK PARTITION ON DATABASE----------------------------------------------------------------------------------
+
+select 
+	t.name as TableName
+	, ps.name as PartitionScheme
+	, pf.name as PartitionFunction
+	, p.partition_number
+	, p.rows
+	, case 
+		when pf.boundary_value_on_right=1 then 'RIGHT' 
+		else 'LEFT' 
+	  end [range_type]
+	, prv.value [boundary]
+from sys.tables t
+    join sys.indexes i on t.object_id = i.object_id
+    join sys.partition_schemes ps on i.data_space_id = ps.data_space_id
+    join sys.partition_functions pf on ps.function_id = pf.function_id
+    join sys.partitions p on i.object_id = p.object_id and i.index_id = p.index_id
+    join sys.partition_range_values prv on pf.function_id = prv.function_id and p.partition_number = prv.boundary_id
+where i.index_id < 2  --So we're only looking at a clustered index or heap, which the table is partitioned on
+order by p.partition_number
+
+--------------------------------------------------CHECK DATABASE IS READY FOR FAILOVER-------------------------------------------------------------------------------
+
+------database is ready for failover--
+
+SELECT
+    database_name, is_failover_ready
+FROM sys.dm_hadr_database_replica_cluster_states  
+WHERE replica_id  IN (SELECT replica_id FROM sys.availability_replicas)
+
+----------------
+select
+    ag.name,
+    ar.replica_server_name,
+    ar.availability_mode_desc as [availability_mode],
+    ars.synchronization_health_desc as replica_sync_state,
+    rcs.database_name,
+    drs.synchronization_state_desc as db_sync_state,
+    rcs.is_failover_ready,
+    rcs.is_pending_secondary_suspend,
+    rcs.is_database_joined
+from sys.dm_hadr_database_replica_cluster_states as rcs
+join sys.availability_replicas as ar
+    on ar.replica_id = rcs.replica_id
+join sys.dm_hadr_availability_replica_states as ars
+    on ars.replica_id = ar.replica_id
+join sys.dm_hadr_database_replica_states as drs
+    on drs.group_database_id = rcs.group_database_id
+    and drs.replica_id = ar.replica_id
+join sys.availability_groups as ag
+    on ag.group_id = ar.group_id
+
+-------------------
+
+SELECT
+    database_name, is_failover_ready
+FROM sys.dm_hadr_database_replica_cluster_states  
+WHERE replica_id  IN (SELECT replica_id FROM sys.availability_replicas)
+ 
+-----------------------------------------------------------FOR ROUNTING CHANGE--------------------------------------------------------------------------------------------
+
+USE [master]
+GO
+ALTER AVAILABILITY GROUP [ODS_AG_01]
+MODIFY REPLICA ON N'UNICA-PROD-DB01' WITH (PRIMARY_ROLE(READ_ONLY_ROUTING_LIST = (N'UNICA-PROD-DB01')))
+GO
+ USE [master]
+GO
+ALTER AVAILABILITY GROUP [ODS_AG_01] 
+MODIFY REPLICA ON N'UNICA-PROD-DB01' WITH (PRIMARY_ROLE (READ_ONLY_ROUTING_LIST=(('UNICA-PROD-DB2'), 'UNICA-PROD-DB01')));
+
+------------------------------------------------FIND WHICH DB IS IN ALWAYS ON---------------------------------------------------------------------------------- 
+ 
+SELECT
+AG.name AS [AvailabilityGroupName],
+ISNULL(agstates.primary_replica, '') AS [PrimaryReplicaServerName],
+ISNULL(arstates.role, 3) AS [LocalReplicaRole],
+dbcs.database_name AS [DatabaseName],
+ISNULL(dbrs.synchronization_state, 0) AS [SynchronizationState],
+ISNULL(dbrs.is_suspended, 0) AS [IsSuspended],
+ISNULL(dbcs.is_database_joined, 0) AS [IsJoined]
+FROM master.sys.availability_groups AS AG
+LEFT OUTER JOIN master.sys.dm_hadr_availability_group_states as agstates
+   ON AG.group_id = agstates.group_id
+INNER JOIN master.sys.availability_replicas AS AR
+   ON AG.group_id = AR.group_id
+INNER JOIN master.sys.dm_hadr_availability_replica_states AS arstates
+   ON AR.replica_id = arstates.replica_id AND arstates.is_local = 1
+INNER JOIN master.sys.dm_hadr_database_replica_cluster_states AS dbcs
+   ON arstates.replica_id = dbcs.replica_id
+LEFT OUTER JOIN master.sys.dm_hadr_database_replica_states AS dbrs
+   ON dbcs.replica_id = dbrs.replica_id AND dbcs.group_database_id = dbrs.group_database_id
+ORDER BY AG.name ASC, dbcs.database_name
+
+---------------------------------------------------STOP JOB-----------------------------------------------------------------------------------------------------------
+
+USE msdb ;  
+GO  
+EXEC dbo.sp_stop_job  
+    N'sts_lead_table_refresh' ;  
+GO  
+
+--------------------------------------------------ERROR LOG------------------------------------------------------------------------------------------------------------
+
+xp_readerrorlog 0, 1, "login"; 
+xp_readerrorlog 0, 1, recovery, NULL, NULL, NULL, N'desc'
+xp_readerrorlog 0, 1, NULL, NULL, NULL, NULL, N'desc'
+EXEC xp_readerrorlog @p1=0,  @p2=1 
+--Get-Content -Path "C:\Program Files\Microsoft SQL Server\MSSQL11.MSSQLSERVER\MSSQL\Log\errorlog" -wait
+
+----------------------------------------------------CHANGE OWN SCHEMA TO DBO-------------------------------------------------------------------------------------- 
+
+--USE [SQL_Management]
+--GO
+--ALTER AUTHORIZATION ON SCHEMA::[bfl\supportadmin] TO dbo
+--GO
+
+------------------------------------------CHANGE JOB OWNER --------------------------------------------------------------------------------------------------------------------
+
+EXEC MSDB.dbo.sp_update_job @job_name = 'SCI_POS_REV_TRANSACTION',@owner_login_name=N'BFL\sqladmin'
+
+------------------------------------------------------CHECK TABLE SIZE--------------------------------------------------------------------------------------------------
+
+use SupportAdmin
+go
+
+select
+    a2.name [Table],
+    replace(convert (nvarchar, convert(money, a1.rows), 1), '.00','') [Row Count],
+    cast (a1.reserved/128.0/1024 as decimal(9,3)) [Reserved GB],
+    case when a1.reserved = 0 then 0
+    else cast ((100-(100.0*a1.used/a1.reserved)) as decimal(9,2)) end [Unused %]
+from (
+    select
+        ps.object_id,
+        sum (cast (ps.row_count as bigint)) rows,
+        sum (cast (ps.reserved_page_count as bigint)) reserved,
+        sum (cast (ps.used_page_count as bigint)) used
+    from sys.dm_db_partition_stats ps
+    inner join sys.all_objects a2
+              on a2.object_id = ps.object_id
+              and a2.type IN ('U')
+    group by ps.object_id
+    )  a1
+
+left join sys.all_objects a2 ON a1.object_id = a2.object_id
+where (a1.reserved/128) > 5  and a1.rows >10000000
+
+ORDER BY a1.rows DESC, a2.name;
+
+--------------------------------------FIND OUT MISSING INDEX-----------------------------------------------------------------------------------------------------------
+
+SELECT CONVERT (varchar, getdate(), 126) AS runtime,
+    mig.index_group_handle, mid.index_handle,
+    CONVERT (decimal (28,1), migs.avg_total_user_cost * migs.avg_user_impact *
+            (migs.user_seeks + migs.user_scans)) AS improvement_measure,
+    'CREATE INDEX missing_index_' + CONVERT (varchar, mig.index_group_handle) + '_' +
+              CONVERT (varchar, mid.index_handle) + ' ON ' + mid.statement + '
+              (' + ISNULL (mid.equality_columns,'')
+              + CASE WHEN mid.equality_columns IS NOT NULL
+                          AND mid.inequality_columns IS NOT NULL
+                     THEN ',' ELSE '' END + ISNULL (mid.inequality_columns, '')
+              + ')'
+              + ISNULL (' INCLUDE (' + mid.included_columns + ')', '') AS create_index_statement,
+    migs.*,
+    mid.database_id,
+    mid.[object_id]
+FROM sys.dm_db_missing_index_groups AS mig
+INNER JOIN sys.dm_db_missing_index_group_stats AS migs
+    ON migs.group_handle = mig.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details AS mid
+    ON mig.index_handle = mid.index_handle
+ORDER BY migs.avg_total_user_cost * migs.avg_user_impact * (migs.user_seeks + migs.user_scans) DESC
+
+-------------------------------------------------RESTORE DATABASE FROM URL BACKUP------------------------------------------------------------------------------------------- 
+
+---full
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://odssqlbackup.blob.core.windows.net/sqldif2/REMI_backup_2017_11_13_140005_4067420.bak'   
+   WITH CREDENTIAL = N'AzureBackups',
+      MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     ,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+ STATS = 1 ,norecovery  
+
+---diff
+
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://srini3.blob.core.windows.net/sqldif2/REMI_backup_2017_11_13_140005_4067420.bak'   
+   WITH CREDENTIAL = N'AzureBackups',
+     -- MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     --,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+                  STATS = 1 ,norecovery  
+
+---tlog      
+ 
+ 
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://srini3.blob.core.windows.net/sqldif3/REMI_backup_2017_11_13_153001_8862403.trn'   
+   WITH CREDENTIAL = N'AzureBackups',
+     -- MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     --,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+                  STATS = 1 ,recovery
+
+				  
+----------------------------------------------BACKUP DATABASE ON BLOB----------------------------------------------------------------------------------------------
+
+----FULL
+BACKUP DATABASE [DM_STAGING] 
+TO  URL = N'https://sfdcsqlbackup.blob.core.windows.net/fullbkphts/DM_STAGING_backup_2018_06_22_134759_5983969.bak' 
+WITH  CREDENTIAL = N'AzureBackups ' , NOFORMAT, NOINIT,  
+NAME = N'DM_STAGING_backup_2018_06_22_134759_5983969', 
+SKIP, REWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+GO
+
+---diff
+BACKUP DATABASE [DM_STAGING] 
+TO  URL = N'https://sfdcsqlbackup.blob.core.windows.net/diffbkp/DM_STAGING_backup_2018_06_22_134900_7023947.bak' 
+WITH  CREDENTIAL = N'AzureBackups ' ,  DIFFERENTIAL , NOFORMAT, NOINIT,  
+NAME = N'DM_STAGING_backup_2018_06_22_134900_7023947', 
+SKIP, REWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+GO
+---tlog   
+
+BACKUP LOG [DM_STAGING] 
+TO  URL = N'https://sfdcsqlbackup.blob.core.windows.net/logbkp/DM_STAGING_backup_2018_06_22_135001_1373965.trn' 
+WITH  CREDENTIAL = N'AzureBackups ' , NOFORMAT, NOINIT,  
+NAME = N'DM_STAGING_backup_2018_06_22_135001_1373965', 
+SKIP, REWIND, NOUNLOAD, COMPRESSION,  STATS = 10
+GO
+
+---------------------------------------------------SPLIT BACKUP ON URL---------------------------------------------------------------------------------------------------
+
+BACKUP DATABASE [BFL_ODS] TO 
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File1.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File2.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File3.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File4.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File5.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File6.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File7.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File8.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File9.bak',
+URL = N'https://odssqlbackup.blob.core.windows.net/fullbkpbflods/BFL_ODS_Sep_18_2018_2_06PM_File10.bak' 
+WITH COMPRESSION, MAXTRANSFERSIZE = 4194304, BLOCKSIZE = 65536, CHECKSUM, FORMAT,COPY_ONLY, STATS = 1;
+
+
+----------------------------------------------------CHECKDB STATUS------------------------------------------------------------------------------------------------------
+
+DECLARE @curr_tracefilename VARCHAR(500);
+DECLARE @base_tracefilename VARCHAR(500);
+DECLARE @indx INT;
+SELECT @curr_tracefilename = path FROM sys.traces WHERE is_default = 1;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SELECT @indx = PATINDEX('%\%', @curr_tracefilename) ;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SET @base_tracefilename = LEFT( @curr_tracefilename,LEN(@curr_tracefilename) - @indx) + '\log.trc';
+SELECT SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),36, PATINDEX('%executed%',TEXTData)-36) AS command
+, LoginName
+, StartTime
+,@@SERVERNAME as ServerName
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%found%',TEXTData) +6,PATINDEX('%errors %',TEXTData)-PATINDEX('%found%',TEXTData)-6)) AS errors
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%repaired%',TEXTData) +9,PATINDEX('%errors.%',TEXTData)-PATINDEX('%repaired%',TEXTData)-9)) repaired
+, SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%time:%',TEXTData)+6,PATINDEX('%hours%',TEXTData)-PATINDEX('%time:%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%hours%',TEXTData) +6,PATINDEX('%minutes%',TEXTData)-PATINDEX('%hours%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%minutes%',TEXTData) +8,PATINDEX('%seconds.%',TEXTData)-PATINDEX('%minutes%',TEXTData)-8) AS time
+FROM::fn_trace_gettable( @base_tracefilename, DEFAULT)
+WHERE EventClass = 22 AND SUBSTRING(TEXTData,36,12) = 'DBCC CHECKDB';
+
+-------------------------------------------------------LINKED SERVER DISABLED AND ENABLED---------------------------------------------------------------------------------- 
+
+-- Disable data access
+USE [master]
+GO
+EXEC master.dbo.sp_serveroption @server=N'SALES_FORCE_CD', @optname=N'data access', @optvalue=N'FALSE'
+GO
+
+-- Enable data access
+USE [master]
+GO
+EXEC master.dbo.sp_serveroption @server=N'SALES_FORCE_CD', @optname=N'data access', @optvalue=N'True'
+GO
+
+---------------------------------------------------FIND TABLE DEPENDENCY--------------------------------------------------------------------------------------------- 
+
+SELECT OBJECT_SCHEMA_NAME ( referencing_id ) + '.' + 
+    OBJECT_NAME(referencing_id) AS referencing_object_name, 
+    obj.type_desc AS referencing_object_type
+    FROM sys.sql_expression_dependencies AS depends
+INNER JOIN sys.objects AS obj ON depends.referencing_id = obj.object_id
+WHERE referenced_id = OBJECT_ID(N'dbo.Tbl_Score_Card_CD')------------Pass object name
+Order by referencing_object_type
+
+---------------------------------------------------------------FIND DB DEPENDENCY ON JOB-------------------------------------------------------------------------------------------- 
+
+SELECT j.name,
+s.database_name,
+s.command
+FROM msdb.dbo.sysjobsteps s
+INNER JOIN msdb.dbo.sysjobs j
+ON s.job_id = j.job_id
+where s.database_name='BIU' ---Pass DB Name
+
+--------------------------------------------------FIND SPACE AVAILABLE ON DATABASE-------------------------------------------------------------------------------
+
+	USE tempdb 
+	SELECT
+		a.FILEID,
+		CONVERT(decimal(12,2),ROUND(a.size/128.000,2)) as [FILESIZEINMB] ,
+		CONVERT(decimal(12,2),ROUND(fileproperty(a.name,'SpaceUsed')/128.000,2)) as [SPACEUSEDINMB],
+		CONVERT(decimal(12,2),ROUND((a.size-fileproperty(a.name,'SpaceUsed'))/128.000,2)) as [FREESPACEINMB],
+		a.name as [DATABASENAME],
+		a.FILENAME as [FILENAME]
+
+	FROM
+		dbo.sysfiles a
+
+---------------------------------------------------------to connect on 32.7 add below string in connection-----------------------------------------------------
+
+applicationintent=readonly; initial catalog = BFL_ODS
+
+-------------------------------------------------------Get the Last SQL Service Restart-------------------------------------------------------
+
+SELECT sqlserver_start_time  AS LastSQLServiceRestart FROM sys.dm_os_sys_info
+
+-----------------------------------------------kill session to connect database------------------------------------------------------------------------------------- 
+
+set nocount on
+declare @databasename varchar(100)
+declare @query varchar(max)
+set @query = ''
+
+set @databasename = 'SFDC_STS_NEW'
+if db_id(@databasename) < 4
+begin
+	print 'system database connection cannot be killeed'
+return
+end
+
+select @query=coalesce(@query,',' )+'kill '+convert(varchar, spid)+ '; '
+from master..sysprocesses where dbid=db_id(@databasename)
+
+if len(@query) > 0
+begin
+print @query
+	exec(@query)
+end
+
+-----BELOW QUERY IS TO CHECK THE SESSIONS CONNECTED TO DATABASE
+
+select *
+from master..sysprocesses where dbid=db_id('SFDC_STS_NEW')
+
+
+SELECT 
+    DB_NAME(dbid) as DBName, 
+    COUNT(dbid) as NumberOfConnections,
+    loginame as LoginName
+FROM
+    sys.sysprocesses
+WHERE 
+    dbid > 0
+GROUP BY 
+    dbid, loginame
+;
+
+-- Another query to check the connections / sessions connected to database
+
+DECLARE @AllConnections TABLE(
+    SPID INT,
+    Status VARCHAR(MAX),
+    LOGIN VARCHAR(MAX),
+    HostName VARCHAR(MAX),
+    BlkBy VARCHAR(MAX),
+    DBName VARCHAR(MAX),
+    Command VARCHAR(MAX),
+    CPUTime INT,
+    DiskIO INT,
+    LastBatch VARCHAR(MAX),
+    ProgramName VARCHAR(MAX),
+    SPID_1 INT,
+    REQUESTID INT
+)
+
+INSERT INTO @AllConnections EXEC sp_who2
+
+SELECT * FROM @AllConnections WHERE DBName = 'SFDC_STS_NEW'
+
+--------------------------------------------------REBUILD ALL INDEX IN SINGLE TABLE-----------------------------------------------------------------------------------------
+
+alter index all on sfdc_Sts..cclead__c
+rebuild with (fillfactor  =80 , sort_in_tempdb = on, statistics_norecompute =on, online= on);
+
+------------------------------------------------View server state Permission to a User or Role in SQL Server----------------------------------------------------
+ 
+Grant view server state to [BFL\sagarmeshram1]
+
+------------------------------------------------View databses state Permission to a User or Role in SQL Server--------------------------------------------------
+
+grant view database state to [BFL\akashnawale]
+
+-------------------------------------------------View Definition Permission to a User or Role in SQL Server--------------------------------------------------
+
+ use [dbname]
+
+GRANT VIEW Definition TO [BFL\sagarmeshram1]
+
+--------------------------------------------------View execution plan Permission to a User in SQL Server-------------------------------------------------
+
+use [dbname]
+
+GRANT Showplan to  [BFL\aartisharma1]  GO
+
+--It Will Generate Script for All Database.
+
+ EXEC sp_MSforeachdb N'IF EXISTS
+(
+SELECT 1 FROM sys.databases WHERE name = "?"
+AND Is_read_only <> 1
+)
+BEGIN
+print "Use [?]; GRANT Showplan TO [BFL\vniazanapuram]"
+END'
+
+--------------------------------------------------permission to use the bulk load statement---------------------------------------------------------------
+
+GRANT ADMINISTER BULK OPERATIONS TO [BFL\sanjaypardeshi]
+
+---------------------------------------------------------------cmd shell permission--------------------------------------------------------------
+
+GRANT EXECUTE ON xp_cmdshell TO [BFL\E49186]
+
+REVOKE EXECUTE ON xp_cmdshell FROM [BFL\pramodingale]
+
+-----------------------------------------------------CREATE LOGIN--------------------------------------------------------------------------------------
+
+USE [master]
+GO
+CREATE LOGIN [BFL\akshaypawar] FROM WINDOWS WITH DEFAULT_DATABASE=[master]
+GO
+
+--------------------------------------------CHECK JOB OWNER ON SERVER-------------------------------------------------------------------------------------
+
+select s.name,l.name
+ from  msdb..sysjobs s 
+ left join master.sys.syslogins l on s.owner_sid = l.sid
+
+-------------------------------------------------RENAME DATABASE-----------------------------------------------------------------------------------
+
+--USE master;  
+--GO  
+--ALTER DATABASE B2C_RCS  
+--Modify Name = B2C_RCS_OLD ;  
+--GO 
+
+--------------------------------------------RENAME TABLE------------------------------------------------------------------------------------------
+
+--USE AdventureWorks2012;  
+--GO  
+--EXEC sp_rename 'Sales.SalesTerritory', 'SalesTerr';  
+--GO 
+
+---------------------------------------------BLOCKING SESSION-----------------------------------------------------------------------------------------------------------------
+
+select session_id, status, blocking_session_id from sys.dm_exec_requests 
+where blocking_session_id <>0
+go
+
+---------------------------------------------CHECK AG SEEDING STATUS-----------------------------------------------------------------------------------------------------------------
+
+SELECT
+ r.session_id, r.status, r.command, r.wait_type
+ , r.percent_complete, r.estimated_completion_time
+FROM sys.dm_exec_requests r JOIN sys.dm_exec_sessions s
+ ON r.session_id = s.session_id
+WHERE r.session_id <> @@SPID
+AND s.is_user_process = 0
+AND r.command like 'VDI%'
+
+----------------------------------------------------------alwys on status with listener information--------------------------------------------------------------
+
+SELECT ag.name AS 'AG Name', ar.replica_server_name AS 'Replica Instance',
+DB_NAME(dr_state.database_id) AS 'Database',
+Location = CASE
+WHEN ar_state.is_local = 1 THEN N'LOCAL'
+ELSE 'REMOTE' END,
+Role = CASE
+WHEN ar_state.role_desc IS NULL THEN N'DISCONNECTED'
+ELSE ar_state.role_desc  END,
+ar_state.connected_state_desc AS 'Connection State', ar.availability_mode_desc AS 'Mode',
+dr_state.synchronization_state_desc AS 'State'
+FROM ((sys.availability_groups AS ag JOIN sys.availability_replicas AS ar  ON ag.group_id =
+ar.group_id )
+JOIN sys.dm_hadr_availability_replica_states AS ar_state ON ar.replica_id = ar_state.
+replica_id)
+JOIN sys.dm_hadr_database_replica_states dr_state ON
+ag.group_id = dr_state.group_id and dr_state.replica_id = ar_state.replica_id;
+GO
+SELECT b.dns_name, a.ip_address, a.ip_subnet_mask, a.state_desc, b.port 
+FROM sys.availability_group_listener_ip_addresses a
+INNER JOIN sys.availability_group_listeners b
+ON a.listener_id=b.listener_id
+
+----------------------------------------------LIST OUT ALL SQL LOGINS----------------------------------------------------------------------------------------------------------------
+
+select @@SERVERNAME as 'Server Name',Name as 'Login'  
+ from sys.server_principals (nolock)
+where type_desc='SQL_LOGIN'
+and principal_id>1
+and name not like '##%'
+
+----------------------------------------------------to check how much data file has free space-----------------------------------------------------------
+
+use database_name
+SELECT DB_NAME() AS DbName, 
+name AS FileName, 
+size/128.0 AS CurrentSizeMB, 
+size/128.0 - CAST(FILEPROPERTY(name, 'SpaceUsed') AS INT)/128.0 AS FreeSpaceMB 
+FROM sys.database_files; 
+
+------------------------------------------------to check how much DB has free space & actual size of DB------------------------------------------------------
+
+SELECT DB_NAME() AS DbName, 
+name AS FileName, 
+size/128.0 AS CurrentSizeMB, 
+size/128.0 - CAST(FILEPROPERTY(name, 'SpaceUsed') AS INT)/128.0 AS FreeSpaceMB 
+FROM sys.database_files
+WHERE type_desc = 'ROWS'
+GO
+
+--------------------------------------------------------top 100 tables in databases----------------------------------------------------------------
+
+SELECT top 100 
+	db_name() as DB,
+    t.NAME AS TableName,
+    p.rows AS RowCounts,
+    (SUM(a.total_pages) * 8)/1000000 AS TotalSpaceGB, 
+    (SUM(a.used_pages) * 8)/1000000 AS UsedSpaceGB, 
+    ((SUM(a.total_pages) - SUM(a.used_pages)) * 8)/1000000 AS UnusedSpaceGB
+FROM 
+    sys.tables t
+INNER JOIN      
+    sys.indexes i ON t.OBJECT_ID = i.object_id
+INNER JOIN 
+    sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
+INNER JOIN 
+    sys.allocation_units a ON p.partition_id = a.container_id
+LEFT OUTER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+WHERE 
+    t.NAME NOT LIKE 'dt%' 
+    AND t.is_ms_shipped = 0
+    AND i.OBJECT_ID > 255 
+GROUP BY 
+    t.Name, s.Name, p.Rows
+ORDER BY 
+SUM(a.total_pages) desc
+
+------------------------------------------------check Databases is encrpted or not-------------------------------------------------------------------------------
+
+SELECT
+    db.name,
+    db.is_encrypted,
+    dm.encryption_state,
+    dm.percent_complete,
+    dm.key_algorithm,
+    dm.key_length
+FROM
+    sys.databases db
+    LEFT OUTER JOIN sys.dm_database_encryption_keys dm
+        ON db.database_id = dm.database_id;
+GO
+------------------------------
+SELECT
+[db].name,
+[db].is_encrypted,
+[dek].encryption_state,
+CASE [dek].encryption_state
+WHEN 0 THEN 'Not Encrypted'
+WHEN 1 THEN 'Unencrypted'
+WHEN 2 THEN 'Encryption in progress'
+WHEN 3 THEN 'Encrypted'
+WHEN 4 THEN 'Key change in progress'
+WHEN 5 THEN 'Decryption in progress'
+WHEN 6 THEN 'Protection change in progress '
+ELSE 'Not Encrypted'
+END AS 'Desc'
+FROM
+sys.dm_database_encryption_keys [dek]
+RIGHT JOIN
+sys.databases [db] ON [dek].database_id = [db].database_id
+
+------------------------------------------------------to check audit log information --------------------------------------------------------------------------
+
+SELECT
+    database_name
+    ,schema_name
+    ,object_name
+    ,session_id
+    ,server_principal_name as [user_name]
+    ,statement
+   ,DATEADD(mi,330,event_time) as 'EvenTime'
+   ,action_id
+    ,succeeded
+    ,file_name
+   ,server_instance_name
+    ,additional_information
+FROM fn_get_audit_file('E:\AUD\CE\*.sqlaudit', NULL, NULL)
+ORDER BY event_time DESC
+
+-----------------------------------------------check unmask permission for masking concept in 2016--------------------------------------------------------------------------
+
+select  princ.name
+,       princ.type_desc
+,       perm.permission_name
+,       perm.state_desc
+,       perm.class_desc
+,       object_name(perm.major_id)
+from    sys.database_principals princ
+left join
+        sys.database_permissions perm
+on      perm.grantee_principal_id = princ.principal_id where perm.permission_name = 'unmask'
+
+-----------------------------------------------data file movement (multiple file move at same time)--------------------------------------------------------
+
+SELECT d.name as db, f.name, physical_name, f.state_desc,
+'ALTER DATABASE ['+d.name+'] MODIFY FILE (name='''+f.name+''' ,filename='''+replace(physical_name,'C:\database','D:\whatever')+'''); ' as DetachCommand,
+'ALTER DATABASE ['+d.name+'] SET OFFLINE WITH ROLLBACK IMMEDIATE' as OfflineCommand,
+'ALTER DATABASE ['+d.name+'] SET ONLINE' as ReattachCommand
+from sys.master_files f 
+inner join sys.databases d on d.database_id=f.database_id
+where physical_name like 'C%.mdf'
+
+
+use master
+ALTER DATABASE DM_STAGING MODIFY FILE (name='DM_STAGING_log',filename='R:\DM_STAGING\DM_STAGING_log.ldf');
+ALTER DATABASE DM_STAGING SET OFFLINE WITH ROLLBACK IMMEDIATE;
+ALTER DATABASE DM_STAGING SET ONLINE;
+
+-------------------------------------------------DB growth history on server------------------------------------------------------------
+
+SELECT LEFT(SQLSERVER, 25) AS 'SERVERNAME',
+       LEFT(DBNAME, 25) AS 'DATABASE_NAME',
+       MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                     WHEN 0
+                           THEN DATE_STAMP
+                     ELSE '02/02/1947'
+                     END) AS 'TODAY',
+       LEFT(MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 0
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END), 12) AS 'DB SIZE TODAY (GB)',
+       LEFT(MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 1
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END), 12) AS 'DB SIZE YESTERDAY (GB)',
+       LEFT(MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 0
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END) - MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 1
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END), 12) AS 'DAILY DIFF (GB)',
+       LEFT(MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 7
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END), 12) AS 'DB SIZE WEEK-AGO (GB)',
+       LEFT(MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 0
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END) - MAX(CASE DATEDIFF(DAY, DATE_STAMP, GETDATE())
+                           WHEN 7
+                                  THEN CAST(DBSIZE AS DECIMAL(12, 1))
+                           ELSE 0
+                           END), 12) AS 'WEEKLY DIFF (GB)'
+FROM [SQL_MANAGEMENT].[DBO].[DB_SIZE_CHK]
+WHERE DATEDIFF(DAY, DATE_STAMP, GETDATE()) < 8
+GROUP BY SQLSERVER,
+       DBNAME
+ORDER BY 2
+
+---------------------------------------------------------check the Filenames and paths of your data and log files------------------------------------------
+
+SELECT 
+    DB_NAME ([database_id]) AS [Database Name]
+    ,name
+    ,physical_name
+    ,type_desc
+    ,state_desc
+    ,CONVERT(bigint, size/128.0) AS [Total Size in MB]
+    ,CONVERT(decimal(18,2), size/131072.0) AS [Total Size in GB]
+FROM
+    sys.master_files WITH(NOLOCK)
+WHERE
+    [database_id] > 4
+    AND [database_id] <> 32767
+    OR [database_id] = 2
+ORDER BY DB_NAME ([database_id]) OPTION(RECOMPILE)
+
+--------------------------------------------------check when your SQL Server was installed-----------------------------------------------
+
+SELECT 
+    @@SERVERNAME AS [Server Name] 
+    ,createdate AS [SQL Server Install Date]
+FROM
+    sys.sysloginsnn
+WHERE 
+[sid] = 0x010100000000000512000000
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+–1.To find out which recovery model your database is using
+
+SELECT databasepropertyex(‘database', ‘recovery')
+
+——————————————————————————
+
+–2.To change the recovery option for a database
+
+ALTER DATABASE database name SET RECOVERY {FULL | SIMPLE | BULK_LOGGED}
+
+——————————————————————————
+–3.To know the compatability level of all databases
+
+select * from sys.databases
+
+——————————————————————————
+
+–4.To know the compatability of a particular database
+
+select * from sys.databases where name='database name'
+
+——————————————————————————
+
+–5.To know the space availability in a log file
+
+dbcc sqlperf(logspace)
+
+——————————————————————————
+
+–6.To know the space availability in a data file
+
+sp_spaceused
+——————————————————————————
+
+–7.To know the details of particular database (db name,filename,filegroup,size)
+
+sp_helpfile
+
+——————————————————————————
+
+–8.To know the details of all databases (db name,size,owner,date created,status,compatability level)
+
+sp_helpdb
+
+——————————————————————————
+
+–9.To know the details of database (name,filename)
+
+select * from sys.sysaltfiles
+
+——————————————————————————
+
+–10.To know the details of database (db name,login name,status,command)
+
+sp_who2
+
+——————————————————————————
+
+–11.command for FULL BACKUP
+
+backup database 'database name' to disk='path.bak'
+
+——————————————————————————
+
+–12.command for differential backup
+
+backup database 'aaa' to disk='path.bak' with differential
+
+——————————————————————————
+
+–13.command for transaction log backup
+
+backup log 'aaa' to disk='d:\aaalog.trn'
+
+——————————————————————————
+
+–14.command for file & filegroup backup
+
+backup database 'aaa' file='aaa', filegroup='primary' to disk='d:\aaafile.bak' with noformat
+
+——————————————————————————
+
+–15.command for tail log backup
+
+backup log 'aaa' to disk='d:\aaatail.trn' with no_truncate
+
+——————————————————————————
+
+–16.command for mirrored backup
+
+backup database focus to disk='d:\aaamirror1.bak' mirror to disk='d:\aaamirror2.bak' with format
+
+——————————————————————————
+
+–17.command for striped backup
+
+backup database focus to disk='d:\aaastriped_part1.bak',disk='d:\aaastriped_part2.bak'
+
+——————————————————————————
+–18.command for partial backup
+
+backup database focus read_write_filegroups to disk='d:\aaapartial.bak'
+
+——————————————————————————
+
+–19.command for partial differential backup
+
+backup database focus read_write_filegroups to disk='d:\aaapartialdiff.bak' with differential
+
+——————————————————————————
+
+–20. command for copyonly backup for (data files)
+
+backup database focus to disk='d:\aaa_copyonly.bak' with copy_only
+
+——————————————————————————
+
+–21.command for copyonly backup for (log files)
+
+backup log focus to disk='d:\aaa_copyonly_log.bak' with copy_only
+
+——————————————————————————
+
+–22.To know the server role permissions
+
+exec sp_srvrolepermission
+——————————————————————————
+
+–23.To know the particular server role permission
+
+exec sp_srvrolepermission sysadmin
+
+——————————————————————————
+
+–24.To create built in administrator account
+
+create login[builtin administrators] from windows
+
+——————————————————————————
+
+–25.To know the details of protocols
+
+select * from sys.endpoints
+
+——————————————————————————
+
+–26.To know rows in a table
+
+select count (*) from tablename
+
+——————————————————————————
+
+–27.command for restore
+
+
+database dbname from disk='path' with norecovery,replace
+
+——————————————————————————
+
+–28.command to know the validity of a backup
+
+restore verifyonly from disk='path'
+
+——————————————————————————
+
+–29.command to know the header of backup
+
+restore headeronly from disk='path'
+
+——————————————————————————
+
+–30.command to verify the contents of backup
+
+restore filelistonly from disk='path'
+
+——————————————————————————
+
+–31.command to restore a full backup into a different location
+
+restore DATABASE [NEW_DATABASE_NAME] FROM DISK = 'F:\pathFULL.bak' WITH FILE=1,
+MOVE
+'OLD_FILE_NAME_mdf' TO 'C:\NEW_FILE_NAME….mdf',
+MOVE
+'OLD_FILE_NAME_ldf' TO 'C:\NEW_FILE_NAME…..ldf';
+GO
+
+——————————————————————————
+
+–32.commands to keep database in offline mode
+
+alter database dbname set offline with rollback immediate
+
+–the above option kills all the current transactions &put the database immediately in offline state
+
+alter database dbname set offline with rollback after 5 seconds
+
+–the above option kills the transactions after 5 seconds & then puts the db in offline state
+
+alter database dbname set offline with no_wait
+
+–the above option can be used when we dont want the command to be blocked
+
+——————————————————————————
+
+–33.command to keep the database in online state
+
+alter database dbname set online
+
+——————————————————————————
+
+–34.command for backup of database with PASSWORD protected?
+
+BACKUP DATABASE [DATABASE NAME] TO DISK='C:\path.BAK' WITH MEDIAPASSWORD='password'
+
+——————————————————————————
+
+–35.Restoring database with specifying PASSWORD
+
+RESTORE DATABASE [DATABASE NAME] FROM DISK='C:\path.BAK' WITH MEDIAPASSWORD='password'
+
+——————————————————————————
+
+–36.command to create database
+
+create database dbname
+
+——————————————————————————
+
+–37.command to change the collation settings
+
+alter database dbname collate sql_latin1_general_cp1_cs_as
+
+——————————————————————————
+
+–38.command to set the database in a single user mode
+
+alter database dbname set single_user
+
+——————————————————————————
+
+–39.command to create a file group
+
+alter database dbname add filegroup filegroup name
+
+——————————————————————————
+
+–40.command to change the logical name of a file
+
+alter database dbname modify file(name='old filename',newname='new filename')
+
+——————————————————————————
+
+–41.command to disable autogrowth of a file
+
+alter dbname modify file(name='filename',filegrowth=0)
+
+——————————————————————————
+
+–42.command to resize a file
+
+alter dbname modify file(name='filename',size='kb')
+
+——————————————————————————
+
+–43.command to make database read only
+
+alter database dbname set read_only
+
+——————————————————————————
+
+–44.command to remove file from database
+
+alter database dbname remove file filename
+
+——————————————————————————
+
+–45.command to change the path of a file
+
+alter database dbname modify file(name='logical filename',filename='path.mdf')
+alter database dbname modify file(name='logical filename',filename='path.ldf')
+
+——————————————————————————
+
+–46.command to put database in a restricted mode
+
+alter database dbname set restricted_user
+
+——————————————————————————
+
+–48.command to know the edition
+
+select @@version
+select serverproperty ('edition')
+
+——————————————————————————
+
+–49.command to know how much space is available in logfile
+
+dbcc sqlperf(logspace)
+
+——————————————————————————
+
+–50.command to know how much space is available in datafile
+
+sp_spaceused
+
+——————————————————————————
+
+–51.command to know database name and size
+
+sp_databases
+
+——————————————————————————
+
+–52.command to know the database id
+
+select db_id(databasename)
+
+——————————————————————————
+
+–53.command for point in time recovery
+
+restore log dbname from disk='path' stopat 'dd:mm:yy hh:mm:ss'
+
+——————————————————————————
+
+–54.command to delete older backups
+
+use msdb
+go
+exec sp_delete_database_backuphistory 'dbname'
+
+——————————————————————————
+
+–55.command to delete older backups beyond a date
+
+use msdb
+go
+exec sp_delete_backuphistory'date'
+
+——————————————————————————
+
+–56.command to know job information
+
+use msdb
+select * from sysjobs
+
+——————————————————————————
+
+–57.command to know database is really in suspect mode or not
+
+select databasepropertyex('dbname”status')
+
+——————————————————————————
+
+— 58. SHrink TempDB, log files
+
+USE [tempdb]
+–Check Database File Size before shrink
+SELECT name, size/128.0 – CAST(FILEPROPERTY(name, 'SpaceUsed') AS int)/128.0 AS AvailableSpaceInMB
+FROM sys.database_files
+
+–Shrink tempdb Log File (.ldf)
+DBCC SHRINKFILE(templog,1) — run this line > SQL 2005
+BACKUP LOG tempdb WITH TRUNCATE_ONLY — Truncate_Only, not available > SQL 2005
+DBCC SHRINKFILE(templog,1)
+
+–Shrink tempdb Data File (.mdf)
+DBCC SHRINKFILE(tempdb7,1) — run this line > SQL 2005
+BACKUP LOG tempdb WITH TRUNCATE_ONLY — Truncate_Only, not available > SQL 2005
+DBCC SHRINKFILE(tempdev,1)
+
+–Check Database File Size after shrink
+SELECT name, size/128.0 – CAST(FILEPROPERTY(name, 'SpaceUsed') AS int)/128.0 AS AvailableSpaceInMB
+FROM sys.database_files
+
+------------------------------------------------chack jobname and their owner name -------------------------------------------------------------------------------
+
+select s.name,l.name
+ from  msdb..sysjobs s 
+ left join master.sys.syslogins l on s.owner_sid = l.sid
+where l.name not in ('BFL\mossadmin')
+
+-----------------------------------------------------Missing index details on server (IMP)-----------------------------------------------------------
+
+SELECT t.name AS 'affected_table'
+    , 'Create NonClustered Index IX_' + t.name + '_missing_' 
+        + CAST(ddmid.index_handle AS VARCHAR(10))
+        + ' On ' + ddmid.STATEMENT 
+        + ' (' + IsNull(ddmid.equality_columns,'') 
+        + CASE WHEN ddmid.equality_columns IS Not Null 
+            And ddmid.inequality_columns IS Not Null THEN ',' 
+                ELSE '' END 
+        + IsNull(ddmid.inequality_columns, '')
+        + ')' 
+        + IsNull(' Include (' + ddmid.included_columns + ');', ';'
+        ) AS sql_statement
+    , ddmigs.user_seeks
+    , ddmigs.user_scans
+    , CAST((ddmigs.user_seeks + ddmigs.user_scans) 
+        * ddmigs.avg_user_impact AS INT) AS 'est_impact'
+    , ddmigs.last_user_seek
+FROM sys.dm_db_missing_index_groups AS ddmig
+INNER JOIN sys.dm_db_missing_index_group_stats AS ddmigs
+    ON ddmigs.group_handle = ddmig.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details AS ddmid 
+    ON ddmig.index_handle = ddmid.index_handle
+INNER JOIN sys.tables AS t
+    ON ddmid.OBJECT_ID = t.OBJECT_ID
+WHERE ddmid.database_id = DB_ID()
+    --AND t.name = 'myTableName' 
+ORDER BY CAST((ddmigs.user_seeks + ddmigs.user_scans) 
+    * ddmigs.avg_user_impact AS INT) DESC;
+
+----------------------------------------------------Active connection on database------------------------------------------------------------------------
+
+SELECT DB_NAME(dbid) as DBName,COUNT(dbid) as NumberOfConnections,loginame as LoginName FROM sys.sysprocesses WHERE dbid > 0 GROUP BY dbid, loginame;
+
+------------------------------------------------user access deatils--------------------------------------------------------------------------------
+
+SELECT SP1.name AS LoginName, SP2.name AS RoleName
+FROM sys.server_role_members SRM,
+sys.server_principals SP1,
+sys.server_principals SP2
+WHERE SRM.member_principal_id = SP1.principal_id
+AND SRM.role_principal_id = SP2.principal_id
+
+------------------------------------------------------find user and their permission----------------------------------------------------------------
+
+SELECT pr.principal_id, pr.name, pr.type_desc,   
+    pe.state_desc, pe.permission_name   
+FROM sys.server_principals AS pr   
+JOIN sys.server_permissions AS pe   Q
+    ON pe.grantee_principal_id = pr.principal_id; 
+
+
+select su.name as username,
+sr.name as rolename from sysusers as su inner join sysusers as sr on su.gid=sr.uid
+where su.gid<>su.uid
+order by rolename , username
+
+----------------------------------------------------deny select on specific db give it to role---------------------------------------------------------------------------
+
+use [ProspectMart]
+GO
+DENY SELECT ON [dbo].[DIM_HOSPITAL_DETAILS] TO [PROSPECTMART_DENY_CUSTINFO]
+
+
+----------------------------------------------When were Statistics last updated--------------------------------------------------------------------------------------
+
+		SELECT OBJECT_NAME(object_id) AS [ObjectName]
+			  ,[name] AS [StatisticName]
+			  ,STATS_DATE([object_id], [stats_id]) AS [StatisticUpdateDate]
+		FROM sys.stats;
+
+--------------------------------------------Update statistics on all user databases-------------------------------------------------------------------------
+
+C. Update statistics on all user databases
+
+		EXECUTE dbo.IndexOptimize
+		@Databases = 'USER_DATABASES',
+		@FragmentationLow = NULL,
+		@FragmentationMedium = NULL,
+		@FragmentationHigh = NULL,
+		@UpdateStatistics = 'ALL'
+
+D. Update modified statistics on all user databases
+
+		EXECUTE dbo.IndexOptimize
+		@Databases = 'USER_DATABASES',
+		@FragmentationLow = NULL,
+		@FragmentationMedium = NULL,
+		@FragmentationHigh = NULL,
+		@UpdateStatistics = 'ALL',
+		@OnlyModifiedStatistics = 'Y'
+
+--------------------------------CHECK THE SESSIONS CONNECTED TO DATABASE------------------------------------------------------------------------------------
+
+select *
+from master..sysprocesses where dbid=db_id('DM_BAFL')
+
+--------------------------------------check active transactions--------------------------------------------------------------------------------------------
+
+select * from sys.dm_tran_active_transactions
+select * from sys.sysprocesses
+where open_tran=1
+SELECT DB_NAME() DatabaseName; --- give the db name
+dbcc opentran
+
+-------------------------------------FIND OUT ALWEAYS ON DATABASES-----------------------------------------------------------------------------------------
+
+select * from sys.availability_databases_cluster
+
+-----------------------------grant create and excute permission for SP to user--------------------------------------------------------------- 
+
+ GRANT ALTER ON SCHEMA::dbo TO [BFL\babasahebgoswami]
+GO 
+GRANT CREATE PROCEDURE TO [BFL\babasahebgoswami] 
+GO
+GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO [BFL\babasahebgoswami] 
+Go
+
+---------------------------------DISABLE LOGIN---------------------------------------------------------------------------------------------------- -
+
+DENY CONNECT SQL TO [BFL\piyushpatil]
+GO
+ALTER LOGIN [BFL\piyushpatil] DISABLE
+
+
+----------------------------Grant EXECUTE permission at the schema level---------------------------------------------------------------------------------
+
+GRANT EXECUTE ON SCHEMA::dbo TO db_execproc;
+GO
+
+--------------------------------BCP IN OUT -----------------------------------------------------------------------------------------------------------
+
+BCP dm_bafl.dbo.Behavior_ScoreCard in F:\Nimish\Behavior_ScoreCard -c -q -t "{||}" -S 10.128.1.128 -T
+
+BCP dm_bafl.dbo.CUSTOMER_LAT_LONG out F:\Nimish\CUSTOMER_LAT_LONG -c -q -t "{||}" -S 10.128.1.222 -T
+
+
+-----------------------------------------------DROP ORPHANE USERS---------------------------------------------------------------------------------------------------------------
+
+USE [master]
+GO
+EXEC sp_msforeachdb 'USE [?]; EXEC sp_Drop_OrphanedUsers'
+
+
+------------------------------------------------------------FIND ORPHANED USES--------------------------------------------------------------------------------------------------
+
+select DB_NAME() [database], name as [user_name], type_desc,default_schema_name,create_date,modify_date from sys.database_principals 
+where type in ('G','S','U') 
+and authentication_type<>2 -- Use this filter only if you are running on SQL Server 2012 and major versions and you have "contained databases"
+and [sid] not in ( select [sid] from sys.server_principals where type in ('G','S','U') ) 
+and name not in ('dbo','guest','INFORMATION_SCHEMA','sys','MS_DataCollectorInternalUser')
+
+
+------------------------------------------------------DATA MASKING CIPI ACCESS--------------------------------------------------------------------------------------------------------
+
+SELECT TOP 5 MOBILE_NO FROM DM_IVR_GATEWAY WHERE MOBILE_NO > 0;				--- Data visiable to Sanjay
+EXECUTE AS USER = 'BFL\appsupport';  
+SELECT TOP 5 MOBILE_NO FROM DM_IVR_GATEWAY WHERE MOBILE_NO > 0;				--- Data visiable to Appsupport user
+REVERT;  
+EXECUTE AS USER = '';  
+SELECT TOP 5 MOBILE_NO FROM DM_IVR_GATEWAY WHERE MOBILE_NO > 0;				--- Data Visiable to Portal_User' 
+REVERT;  
+
+-------use cmd for masking columns 
+
+ALTER Table DM_IVR_GATEWAY ALTER COLUMN [MOBILE_NO] ADD MASKED WITH (FUNCTION='default()')	
+
+ALTER TABLE DM_IVR_GATEWAY ALTER COLUMN MOBILE_NO DROP MASKED;  
+
+--------revoke and grant access to user 
+
+REVOKE UNMASK TO ;  -- Do not allow to access
+
+GRANT UNMASK TO ;  -- Allow to access 
+
+------------------------------------------------------------SSRS REPORT USAGE Query-------------------------------------------------------------------------------------- 
+
+https://stevestedman.com/2016/01/ssrs-report-usage-queries/
+
+
+----------------------------------------------------CHECK EXECUTION COUNT AND REPORT NAME ----------------------------------------------------------------------------------- 
+
+SELECT COUNT(Name) AS ExecutionCount,
+       Name,
+       SUM(TimeDataRetrieval) AS TimeDataRetrievalSum,
+       SUM(TimeProcessing) AS TimeProcessingSum,
+       SUM(TimeRendering) AS TimeRenderingSum,
+       SUM(ByteCount) AS ByteCountSum,
+       SUM([RowCount]) AS RowCountSum
+  FROM (SELECT TimeStart,
+               Catalog.Type,
+               Catalog.Name,
+               TimeDataRetrieval,
+               TimeProcessing,
+               TimeRendering,
+               ByteCount,
+               [RowCount]
+          FROM Catalog
+               INNER JOIN 
+               ExecutionLog
+                 ON Catalog.ItemID = ExecutionLog.ReportID
+         WHERE Type = 2
+       ) AS RE
+GROUP BY Name
+ORDER BY COUNT(Name) DESC,
+         Name;
+
+---------------------------------------------CHECK AUTO SEEDING ESTIMATE TIME---------------------------------------------------------------------------------------
+
+SELECT local_database_name, 
+    role_desc, 
+    internal_state_desc, 
+    transfer_rate_bytes_per_second, 
+    transferred_size_bytes, 
+    database_size_bytes, 
+    start_time_utc, 
+    end_time_utc, estimate_time_complete_utc, 
+    total_disk_io_wait_time_ms, 
+    total_network_wait_time_ms, 
+    is_compression_enabled 
+FROM sys.dm_hadr_physical_seeding_stats
+
+---------------------------------------------------------ROBO COPY-----------------------------------------------------------------------------------------------------
+
+Robocopy E:\Backup\TEST \\10.130.0.116\e$\Backup\Test /COPYALL /ZB /R:10 /W:2 /E /MT:32
+
+Robocopy G:\Pankaj N:\pankaj /copyall /ZB /R:10 /W:2 /E /MT:32
+
+
+-------------------------------------------------------------------check full backup script for all serve-----------------------------------------------------------------------------
+
+WITH LastBackUp AS
+( SELECT  bs.database_name, bs.backup_size, CONVERT(VARCHAR(20), bs.backup_start_date, 13) as Last_Full_DB_Backup_Start_Date,
+CONVERT(VARCHAR(20), bs.backup_finish_date, 13) as Last_Full_DB_Backup_Finish_Date,
+bmf.physical_device_name, Position = ROW_NUMBER() OVER( PARTITION BY bs.database_name ORDER BY bs.backup_start_date DESC ),
+bs.USER_NAME 'Backup by Username' FROM  msdb.dbo.backupmediafamily bmf
+JOIN msdb.dbo.backupmediaset bms ON bmf.media_set_id = bms.media_set_id JOIN msdb.dbo.backupset bs ON bms.media_set_id = bs.media_set_id
+WHERE   bs.[type] = 'd' AND bs.is_copy_only = 0) 
+SELECT  @@servername as DB_Server_Name, sd.name AS [Database],
+CAST(backup_size / 1048576 AS DECIMAL(10, 2) ) AS [BackupSizeMB],
+Last_Full_DB_Backup_Start_Date AS [Last_Full_DB_Backup_Start_Date],
+Last_Full_DB_Backup_finish_Date as [Last_Full_DB_Backup_Finish_Date],
+physical_device_name AS [Backup_File_Location],
+lb.[Backup by Username] as [Backup_By_UserName]
+FROM sys.databases AS sd LEFT JOIN LastBackUp AS lb ON sd.name = lb.database_name AND Position = 1 
+where sd.name<>'tempdb'
+ORDER BY Last_Full_DB_Backup_Finish_Date desc
+
+-----------------------------------CHECK DB ON 32.4 server---------------------------------------------------------------------------------------------------------------------------
+
+USE SQL_Management
+go
+EXEC dbo.LastKnownGoodCheckDBDateForAllDBs
+
+sqlplus FINNEDW_BFPROD/F1NN#3DW#0418@BCFPRD_DR
+----------------------------------------RESTORE DATABASE--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+--------------restore DB backup from URL 
+
+---full
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://odssqlbackup.blob.core.windows.net/sqldif2/REMI_backup_2017_11_13_140005_4067420.bak'   
+   WITH CREDENTIAL = N'AzureBackups',
+      MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     ,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+ STATS = 1 ,norecovery  
+---diff
+
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://srini3.blob.core.windows.net/sqldif2/REMI_backup_2017_11_13_140005_4067420.bak'   
+   WITH CREDENTIAL = N'AzureBackups',
+     -- MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     --,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+	  STATS = 1 ,norecovery 	 
+
+---tlog 	  
+ 
+ 
+RESTORE DATABASE AdventureWorks2014   
+   FROM URL = 'https://srini3.blob.core.windows.net/sqldif3/REMI_backup_2017_11_13_153001_8862403.trn'   
+   WITH CREDENTIAL = N'AzureBackups',
+     -- MOVE 'REMI' to 'J:\TEST\AdventureWorks2014_Data.mdf'  
+     --,MOVE 'REMI_log' to 'J:\TEST\AdventureWorks2014_Log.ldf'  
+	  STATS = 1 ,recovery 
+--  CHECK DDL EVEVNT TABLE 
+CREATE TABLE #Temp1 
+(ObjectName Varchar(500),
+DBName varchar(50), 
+SchemaName varchar(15), 
+)
+
+
+----------------------------------------------------TABLE LEVEL FRAG----------------------------------------------------------------------------------------------------------
+
+SELECT dbschemas.[name] as 'Schema',
+dbtables.[name] as 'Table',
+dbindexes.[name] as 'Index',
+indexstats.avg_fragmentation_in_percent,
+indexstats.page_count
+FROM sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL, NULL, NULL) AS indexstats
+INNER JOIN sys.tables dbtables on dbtables.[object_id] = indexstats.[object_id]
+INNER JOIN sys.schemas dbschemas on dbtables.[schema_id] = dbschemas.[schema_id]
+INNER JOIN sys.indexes AS dbindexes ON dbindexes.[object_id] = indexstats.[object_id]
+AND indexstats.index_id = dbindexes.index_id
+WHERE indexstats.database_id = DB_ID() AND dbtables.[name]  LIKE '%collection_cash%'
+ORDER BY indexstats.avg_fragmentation_in_percent DESC
+
+------------------------------------------------CHECKDB--------------------------------------------------------------------------------------------------------------
+
+DECLARE @curr_tracefilename VARCHAR(500);
+DECLARE @base_tracefilename VARCHAR(500);
+DECLARE @indx INT;
+SELECT @curr_tracefilename = path FROM sys.traces WHERE is_default = 1;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SELECT @indx = PATINDEX('%\%', @curr_tracefilename) ;
+SET @curr_tracefilename = REVERSE(@curr_tracefilename);
+SET @base_tracefilename = LEFT( @curr_tracefilename,LEN(@curr_tracefilename) - @indx) + '\log.trc';
+SELECT SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),36, PATINDEX('%executed%',TEXTData)-36) AS command
+, LoginName
+, StartTime
+,@@SERVERNAME as ServerName
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%found%',TEXTData) +6,PATINDEX('%errors %',TEXTData)-PATINDEX('%found%',TEXTData)-6)) AS errors
+, CONVERT(INT,SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%repaired%',TEXTData) +9,PATINDEX('%errors.%',TEXTData)-PATINDEX('%repaired%',TEXTData)-9)) repaired
+, SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%time:%',TEXTData)+6,PATINDEX('%hours%',TEXTData)-PATINDEX('%time:%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%hours%',TEXTData) +6,PATINDEX('%minutes%',TEXTData)-PATINDEX('%hours%',TEXTData)-6)+':'+SUBSTRING(CONVERT(NVARCHAR(MAX),TEXTData),PATINDEX('%minutes%',TEXTData) +8,PATINDEX('%seconds.%',TEXTData)-PATINDEX('%minutes%',TEXTData)-8) AS time
+FROM::fn_trace_gettable( @base_tracefilename, DEFAULT)
+WHERE EventClass = 22 AND SUBSTRING(TEXTData,36,12) = 'DBCC CHECKDB';
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+SELECT OBJECT_NAME(p.object_id) AS ObjectName ,
+i.name AS IndexName ,
+p.index_id AS IndexID ,
+ds.name AS PartitionScheme ,
+p.partition_number AS PartitionNumber ,
+fg.name AS FileGroupName ,
+prv_left.value AS LowerBoundaryValue ,
+prv_right.value AS UpperBoundaryValue ,
+CASE pf.boundary_value_on_right
+WHEN 1 THEN 'RIGHT'
+ELSE 'LEFT'
+END AS PartitionFunctionRange ,
+p.rows AS Rows
+FROM sys.partitions AS p
+INNER JOIN sys.indexes AS i ON i.object_id = p.object_id
+AND i.index_id = p.index_id
+INNER JOIN sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id
+INNER JOIN sys.partition_schemes AS ps ON ps.data_space_id = 
+ds.data_space_id
+INNER JOIN sys.partition_functions AS pf ON pf.function_id = ps.function_id
+INNER JOIN sys.destination_data_spaces AS dds ON dds.partition_scheme_id 
+= ps.data_space_id
+AND dds.destination_id = p.partition_number
+INNER JOIN sys.filegroups AS fg ON fg.data_space_id = dds.data_space_id
+LEFT OUTER JOIN sys.partition_range_values AS prv_left ON ps.function_id 
+= prv_left.function_id
+AND prv_left.boundary_id = p.partition_number- 1
+LEFT OUTER JOIN sys.partition_range_values AS prv_right ON 
+ps.function_id = prv_right.function_id
+AND prv_right.boundary_id = p.partition_number
+WHERE p.object_id = 
+OBJECT_ID('RESPONSYS.SMS_SENT');----------------spacify 
+--table name
+
+
+
+------------------------------------------------------------CHECK PARTATION TABLE DETAILS--------------------------------------------------------------------------------------------------
+
+SELECT OBJECT_NAME(p.object_id) AS ObjectName ,
+i.name AS IndexName ,
+p.index_id AS IndexID ,
+ds.name AS PartitionScheme ,
+p.partition_number AS PartitionNumber ,
+fg.name AS FileGroupName ,
+prv_left.value AS LowerBoundaryValue ,
+prv_right.value AS UpperBoundaryValue ,
+CASE pf.boundary_value_on_right
+WHEN 1 THEN 'RIGHT'
+ELSE 'LEFT'
+END AS PartitionFunctionRange ,
+p.rows AS Rows
+FROM sys.partitions AS p
+INNER JOIN sys.indexes AS i ON i.object_id = p.object_id
+AND i.index_id = p.index_id
+INNER JOIN sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id
+INNER JOIN sys.partition_schemes AS ps ON ps.data_space_id = ds.data_space_id
+INNER JOIN sys.partition_functions AS pf ON pf.function_id = ps.function_id
+INNER JOIN sys.destination_data_spaces AS dds ON dds.partition_scheme_id = ps.data_space_id
+AND dds.destination_id = p.partition_number
+INNER JOIN sys.filegroups AS fg ON fg.data_space_id = dds.data_space_id
+LEFT OUTER JOIN sys.partition_range_values AS prv_left ON ps.function_id = prv_left.function_id
+AND prv_left.boundary_id = p.partition_number- 1
+LEFT OUTER JOIN sys.partition_range_values AS prv_right ON ps.function_id = prv_right.function_id
+AND prv_right.boundary_id = p.partition_number
+WHERE p.object_id = OBJECT_ID('RESPONSYS.sms_sent');----------------spacify table name 
+
+-------------------------------------------DISABLED LINKED SERVER DATA ACCESS-------------------------------------------------------------------------------------------------------------------
+
+USE [master]
+GO
+EXEC master.dbo.sp_serveroption @server=N'ADSI', @optname=N'data access', @optvalue=N'false'
+GO
+
+
+-------------------------------------------CHECK LAST UPDATE STATS DATE-------------------------------------------------------------------------------------------------------------------
+
+SELECT 
+	OBJECT_NAME(object_id) AS ObjectName
+	,name AS StatisticName
+	,STATS_DATE(object_id, stats_id) AS StatisticUpdateDate	
+FROM sys.stats;
+GO
+
+---------------------------------------CHECK BACKUP STATUS-----------------------------------------------------------------------------------------------------------------------
+
+SELECT 
+	D.name	
+	,CASE 
+	   WHEN MAX(B.backup_finish_date) IS NULL 
+		THEN 'Backup not taken' 
+		ELSE CONVERT(VARCHAR(100),MAX(B.backup_finish_date)) 
+	END AS LastBackupDate
+FROM sys.databases AS D
+LEFT OUTER JOIN msdb.dbo.backupset AS B 
+	ON D.name = B.database_name AND B.type = 'L'
+GROUP BY D.name
+ORDER BY 2 DESC
+
+----------------------------------------------CHECK VIEW PRESENT OR NOT AND ADD DENY_CUST_INFO ROLE--------------------------------------------------------------------------------------------------
+
+
+DECLARE @TEMP TABLE
+(
+       SNo BIGINT IDENTITY(1,1) ,
+       DBNAME VARCHAR(500),
+       SNAME VARCHAR(500),
+       TNAME VARCHAR(500),
+       CNAME VARCHAR(500) 
+)
+
+INSERT INTO @TEMP
+SELECT db_name() AS 'DBName',s.[name] 'Schema',t.[name] 'TableName',c.[name] 'ColumnName'
+FROM sys.schemas s
+                     INNER JOIN sys.tables t ON s.schema_id = t.schema_id
+                     INNER JOIN sys.columns c ON t.object_id = c.object_id
+                     INNER JOIN sys.types d ON c.user_type_id = d.user_type_id
+                     WHERE (NOT Exists  (Select * from master.dbo.String_split ('MNAME,MIDDLENAME,LNAME,LASTNAME,FNAME,FIRSTNAME,MOBILE,EMAIL,ADDRESS,ADD,PAN,DOB,AADHAR,ADHAR,PHONE,CUSTNAME,PASSPORT,VOTER,RATION,LICENSE,CUSTOMERNAME,CUSTOMER_NAME,EMI_CARD,CardNumber,CARD_NO,Card_Number,PASSWORD,PASS_WORD,BIRTH',',') 
+                                   as P Where c.name COLLATE DATABASE_DEFAULT  LIKE '%'+P.token+'%')           
+                     )
+                                  AND T.NAME IN (SELECT DISTINCT t.[name] 'TableName' FROM sys.schemas s
+                     INNER JOIN sys.tables t ON s.schema_id = t.schema_id
+                     INNER JOIN sys.columns c ON t.object_id = c.object_id
+                     INNER JOIN sys.types d ON c.user_type_id = d.user_type_id
+                     WHERE (Exists  (Select * from master.dbo.String_split ('MNAME,MIDDLENAME,LNAME,LASTNAME,FNAME,FIRSTNAME,MOBILE,EMAIL,ADDRESS,ADD,PAN,DOB,AADHAR,ADHAR,PHONE,CUSTNAME,PASSPORT,VOTER,RATION,LICENSE,CUSTOMERNAME,CUSTOMER_NAME,EMI_CARD,CardNumber,CARD_NO,Card_Number,PASSWORD,PASS_WORD,BIRTH',',') 
+                                   as P Where c.name COLLATE DATABASE_DEFAULT  LIKE '%'+P.token+'%')           
+                     ))
+
+SELECT DISTINCT 
+'VW_'+A.TNAME AS 'VIEWNAME','DENY SELECT ON  ['+A.TNAME+'] TO ODM_DENY_CUSTINFO'AS 'TableName',
+CASE WHEN 'VW_'+A.TNAME IN (SELECT NAME FROM SYS.VIEWS WITH (NOLOCK)) THEN 'VIEW EXISTS' ELSE 'NEW' END AS 'REMARKS',
+'USE ['+DB_NAME()+']'+CHAR(10)+'GO'+CHAR(10)+
+'CREATE VIEW ['+A.SNAME+']'+'.[VW_'+A.TNAME+']'+CHAR(10)+'AS'+CHAR(10)+'('+CHAR(10)+'SELECT'+CHAR(10) +A.[Columns] +CHAR(10)+
+'FROM ['+DB_NAME()+'].['+A.SNAME+'].['+A.TNAME+'] WITH (NOLOCK)' +CHAR(10) + ')' as 'CREATE VIEW QUERY'
+FROM (
+select
+    SNAME,TNAME,CNAME,
+    stuff((
+        select ',' + '['+t.CNAME+']'
+        from @TEMP t
+        where t.TNAME = t1.TNAME
+        order by t.TNAME
+        for xml path('')
+    ),1,1,'' ) as 'Columns'
+from @TEMP t1
+group by SNAME,TNAME,CNAME
+)A
+
+
+--------------------------------READ ONLY INTENT------------------------------------------------------------------------------------------------------------------------------
+
+ApplicationIntent=ReadOnly;
+
+------------------------------------------------CHECK RUNNING QUERIES MEMORY ISSUE --------------------------------------------------------------------------------------------------------------
+
+https://blog.sqlauthority.com/2009/10/09/sql-server-queries-waiting-for-memory-allocation-to-execute/
+
+SELECT TEXT, query_plan, requested_memory_kb,
+granted_memory_kb,used_memory_kb, wait_order
+FROM sys.dm_exec_query_memory_grants MG
+CROSS APPLY sys.dm_exec_sql_text(sql_handle)
+CROSS APPLY sys.dm_exec_query_plan(MG.plan_handle)
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+firewall-cmd --permanent --add-port=3306/tcp --add-service=mysql
+
+netstat -tulpn | grep -i listen
+
+
+--------------------------------------------MSDB AUDIT------------------------------------------------------------------------------------------------------------------
+
+
+USE [master]
+GO
+
+/****** Object:  Audit [MsdbSYSJobAuditing]    Script Date: 5/20/2019 7:19:05 PM ******/
+CREATE SERVER AUDIT [MsdbSYSJobAuditing]
+TO FILE 
+(      FILEPATH = N'E:\AUD\MSDB'
+       ,MAXSIZE = 10 MB
+       ,MAX_ROLLOVER_FILES = 10
+       ,RESERVE_DISK_SPACE = OFF
+)
+WITH
+(      QUEUE_DELAY = 1000
+       ,ON_FAILURE = CONTINUE
+       --,AUDIT_GUID = 'b055b2d2-f2f6-438a-a016-19bf87f4fdc5'
+)
+ALTER SERVER AUDIT [MsdbSYSJobAuditing] WITH (STATE = ON)
+GO
+
+
+
+USE [msdb]
+GO
+
+CREATE DATABASE AUDIT SPECIFICATION [MsdbAuditSpecification]
+FOR SERVER AUDIT [MsdbSYSJobAuditing]
+ADD (EXECUTE ON OBJECT::[dbo].[sp_update_jobstep] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[dbo].[sp_update_jobstep] BY [SQLAgentUserRole]),
+ADD (EXECUTE ON OBJECT::[dbo].[sp_add_job] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[dbo].[sp_add_job] BY [SQLAgentUserRole]),
+ADD (EXECUTE ON OBJECT::[dbo].[sp_delete_job] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[dbo].[sp_delete_job] BY [SQLAgentUserRole])
+WITH (STATE = ON)
+GO
+
+
+----------------------------------------------LINKED SERVER AUDIT----------------------------------------------------------------------------------------------------------------
+
+USE [master]
+GO
+
+/****** Object:  Audit [LinkedServer]    Script Date: 5/20/2019 3:28:16 PM ******/
+CREATE SERVER AUDIT [LinkedServer]
+TO FILE 
+(      FILEPATH = N'D:\AuditLogs\LinkedServer\'
+       ,MAXSIZE = 10 MB
+       ,MAX_ROLLOVER_FILES = 10
+       ,RESERVE_DISK_SPACE = OFF
+)
+WITH
+(      QUEUE_DELAY = 1000
+       ,ON_FAILURE = CONTINUE
+       ,AUDIT_GUID = '155dfff6-e738-4b63-8303-02d1c7d6daa9'
+)
+ALTER SERVER AUDIT [LinkedServer] WITH (STATE = ON)
+GO
+
+Database Specification Audit named ‘LinkedServerMaster’
+
+USE [master]
+GO
+
+CREATE DATABASE AUDIT SPECIFICATION [LinkedServerMaster]
+FOR SERVER AUDIT [LinkedServer]
+ADD (EXECUTE ON OBJECT::[sys].[sp_addlinkedserver] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_addserver] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_dropserver] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_addlinkedsrvlogin] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_droplinkedsrvlogin] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_serveroption] BY [dbo]),
+ADD (EXECUTE ON OBJECT::[sys].[sp_setnetname] BY [dbo])
+WITH (STATE = ON)
+GO
+
+
+----------------------------------------------------NOLOCK MISSING----------------------------------------------------------------------------------------------------------
+
+
+TRUNCATE TABLE [MASTER].DBO.[ALLSPLIST] 
+GO
+DECLARE @ALLSPLIST TABLE
+(
+	SNo BIGINT IDENTITY(1,1) ,
+	DBNAME varchar(50),
+	Query TEXT
+)
+
+INSERT INTO @ALLSPLIST
+EXECUTE master.sys.sp_MSforeachdb 'USE [?];
+IF ''?'' IN (''ReportServer'')
+BEGIN
+SELECT DB_NAME(),
+''sp_helptext2 ''''''+
+SPECIFIC_CATALOG+''.''+SPECIFIC_SCHEMA+''.''+SPECIFIC_NAME +''''''''AS SP 
+from information_schema.routines where routine_type = ''PROCEDURE''
+END
+'
+--SELECT * FROM @ALLSPLIST
+
+IF NOT EXISTS (SELECT * FROM [MASTER].SYS.TABLES WHERE NAME =N'ALLSPLIST' AND TYPE='U')
+BEGIN
+CREATE TABLE [MASTER].DBO.[ALLSPLIST] 
+(	
+	LineID INT,
+	SPTEXT VARCHAR(MAX),
+	ObjName VARCHAR(MAX)
+)
+END
+DECLARE @QMax INT , @QMin INT ,@SQLStatement1 NVARCHAR(500),@SQLStatement2 NVARCHAR(500) 
+SELECT @QMax=MAX(SNo), @QMin=MIN(SNo) FROM @ALLSPLIST
+WHILE @QMax>=@QMin
+BEGIN
+    SELECT @SQLStatement1 = Query FROM @ALLSPLIST WHERE SNo = @QMin       
+    BEGIN 
+		--PRINT @SQLStatement1
+		INSERT INTO [MASTER].DBO.ALLSPLIST
+		EXECUTE sp_ExecuteSQL @SQLStatement1            	
+    END
+        DELETE FROM @ALLSPLIST WHERE SNO = @QMin      
+        SELECT @QMin = MIN(SNO)  FROM @ALLSPLIST       
+END
+--SELECT  * FROM [MASTER].DBO.ALLSPLIST WITH (NOLOCK)
+
+
+SELECT * FROM
+(
+SELECT  * FROM [MASTER].DBO.ALLSPLIST WITH (NOLOCK)
+where sptext like '%from %'
+or sptext like '%join %'
+or sptext like '%inner %'
+)a
+WHERE A.SPTEXT NOT LIKE '%NOLOCK%'
+and ObjName NOT IN (SELECT SPName from SQL_MANAGEMENT..SPNOLOCKEXCLUSION (NOLOCK))
+
+
+
+
+-------------------------------------------------CRATE VIEW FOR CIPI OBJECT-------------------------------------------------------------------------------------------------------------
+
+use MOBILE
+go
+DECLARE @TEMP TABLE
+(
+       SNo BIGINT IDENTITY(1,1) ,
+       DBNAME VARCHAR(500),
+       SNAME VARCHAR(500),
+       TNAME VARCHAR(500),
+       CNAME VARCHAR(500) 
+)
+
+INSERT INTO @TEMP
+SELECT db_name() AS 'DBName',s.[name] 'Schema',t.[name] 'TableName',c.[name] 'ColumnName'
+FROM sys.schemas s
+                     INNER JOIN sys.tables t ON s.schema_id = t.schema_id
+                     INNER JOIN sys.columns c ON t.object_id = c.object_id
+                     INNER JOIN sys.types d ON c.user_type_id = d.user_type_id
+                     WHERE (NOT Exists  (Select * from master.dbo.String_split ('MNAME,MIDDLENAME,LNAME,LASTNAME,FNAME,FIRSTNAME,MOBILE,EMAIL,ADDRESS,ADD,PAN,DOB,AADHAR,ADHAR,PHONE,CUSTNAME,PASSPORT,VOTER,RATION,LICENSE,CUSTOMERNAME,CUSTOMER_NAME,EMI_CARD,CardNumber,CARD_NO,Card_Number,PASSWORD,PASS_WORD,BIRTH',',') 
+                                   as P Where c.name COLLATE DATABASE_DEFAULT  LIKE '%'+P.token+'%')           
+                     )
+                                  AND T.NAME IN (SELECT DISTINCT t.[name] 'TableName' FROM sys.schemas s
+                     INNER JOIN sys.tables t ON s.schema_id = t.schema_id
+                     INNER JOIN sys.columns c ON t.object_id = c.object_id
+                     INNER JOIN sys.types d ON c.user_type_id = d.user_type_id
+                     WHERE (Exists  (Select * from master.dbo.String_split ('MNAME,MIDDLENAME,LNAME,LASTNAME,FNAME,FIRSTNAME,MOBILE,EMAIL,ADDRESS,ADD,PAN,DOB,AADHAR,ADHAR,PHONE,CUSTNAME,PASSPORT,VOTER,RATION,LICENSE,CUSTOMERNAME,CUSTOMER_NAME,EMI_CARD,CardNumber,CARD_NO,Card_Number,PASSWORD,PASS_WORD,BIRTH',',') 
+                                   as P Where c.name COLLATE DATABASE_DEFAULT  LIKE '%'+P.token+'%')           
+                     ))
+
+SELECT DISTINCT 
+'VW_'+A.TNAME AS 'VIEWNAME','DENY SELECT ON  ['+A.TNAME+'] TO ODM_DENY_CUSTINFO'AS 'TableName',
+CASE WHEN 'VW_'+A.TNAME IN (SELECT NAME FROM SYS.VIEWS WITH (NOLOCK)) THEN 'VIEW EXISTS' ELSE 'NEW' END AS 'REMARKS',
+'USE ['+DB_NAME()+']'+CHAR(10)+'GO'+CHAR(10)+
+'CREATE VIEW ['+A.SNAME+']'+'.[VW_'+A.TNAME+']'+CHAR(10)+'AS'+CHAR(10)+'('+CHAR(10)+'SELECT'+CHAR(10) +A.[Columns] +CHAR(10)+
+'FROM ['+DB_NAME()+'].['+A.SNAME+'].['+A.TNAME+'] WITH (NOLOCK)' +CHAR(10) + ')' as 'CREATE VIEW QUERY'
+FROM (
+select
+    SNAME,TNAME,CNAME,
+    stuff((
+        select ',' + '['+t.CNAME+']'
+        from @TEMP t
+        where t.TNAME = t1.TNAME
+        order by t.TNAME
+        for xml path('')
+    ),1,1,'' ) as 'Columns'
+from @TEMP t1
+group by SNAME,TNAME,CNAME
+)A
+
+--------------------------------------ENABLE CDC------------------------------------------------------------------------------------------------------------------------
+
+EXEC sys.sp_cdc_enable_table 
+@source_schema = N'dbo', 
+@source_name   = N'GPTRAN', 
+@role_name     = NULL 
+GO
+
+---------------------------------DELETE RECORD IN BATCH-----------------------------------------------------------------------------------------------------------------------------
+
+SET rowcount 10000
+DELETE FROM tbl_ProductUserRequestQuery_Sales_Docs
+WHERE CreatedDate < '2016-12-31'
+WHILE @@rowcount > 0
+BEGIN
+DELETE FROM tbl_ProductUserRequestQuery_Sales_Docs
+WHERE CreatedDate < '2016-12-31'
+END
+SET rowcount 0
+GO
+
+-----------------------------------DB USE IN OR NOT--------------------------------------------------------------------
+
+
+use master
+go
+declare @sQuery as varchar(4000)  = 'use [?];
+SELECT ''Database:'' + ''?''; SELECT top (2) DB_NAME()AS [Database Name],
+tbl.name
+,ius.last_user_update
+,ius.user_updates
+,ius.last_user_seek
+,ius.last_user_scan
+,ius.last_user_lookup
+,ius.user_seeks
+,ius.user_scans
+,ius.user_lookups
+FROM sys.dm_db_index_usage_stats ius INNER JOIN
+sys.tables tbl ON (tbl.OBJECT_ID = ius.OBJECT_ID)
+WHERE ius.database_id = DB_ID()
+order by 2 desc'
+
+--EXEC SP_msforeachdb 'USE ? SELECT ''?'''
+EXEC sp_msforeachdb @sQuery
+
+------------------------------List all SSRS subscriptions----------------------------------
+
+ 
+USE [ReportServer];  -- You may change the database name.
+GO
+
+SELECT USR.UserName AS SubscriptionOwner
+      ,SUB.ModifiedDate
+      ,SUB.[Description]
+      ,SUB.EventType
+      ,SUB.DeliveryExtension
+      ,SUB.LastStatus
+      ,SUB.LastRunTime
+      ,SCH.NextRunTime
+      ,SCH.Name AS ScheduleName      
+      ,CAT.[Path] AS ReportPath
+      ,CAT.[Description] AS ReportDescription
+FROM dbo.Subscriptions AS SUB
+     INNER JOIN dbo.Users AS USR
+         ON SUB.OwnerID = USR.UserID
+     INNER JOIN dbo.[Catalog] AS CAT
+         ON SUB.Report_OID = CAT.ItemID
+     INNER JOIN dbo.ReportSchedule AS RS
+         ON SUB.Report_OID = RS.ReportID
+            AND SUB.SubscriptionID = RS.SubscriptionID
+     INNER JOIN dbo.Schedule AS SCH
+         ON RS.ScheduleID = SCH.ScheduleID
+ORDER BY USR.UserName
+        ,CAT.[Path];
+
+
+
+------------------------------------------LINKED SERVER RESTRICATION--------------------------------------------
+
+
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N'ADSI', @locallogin = N'BFL\vidyamandava', @useself = N'True'
+
+
+SELECT 'EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N''RBL'', 
+@locallogin = N'''+name+''', @useself = N''True''' FROM 
+sys.server_principals where (type='S' or type = 'U')
+
+---------------------------------------------------------------CHECK PARTITION HISTORY---------------------------------
+
+SELECT OBJECT_NAME(p.object_id) AS ObjectName,i.name AS IndexName,p.index_id AS IndexID,
+ds.name  AS PartitionScheme,p.partition_number  AS PartitionNumber,fg.name AS FileGroupName,prv_left.value  AS LowerBoundaryValue,prv_right.value  AS UpperBoundaryValue,
+CASE pf.boundary_value_on_right
+WHEN 1 THEN 'RIGHT'
+ELSE 'LEFT' END    AS Range, p.rows AS Rows
+FROM sys.partitions AS p JOIN sys.indexes AS i ON i.object_id = p.object_id AND i.index_id = p.index_id
+JOIN sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id
+JOIN sys.partition_schemes AS ps ON ps.data_space_id = ds.data_space_id 
+JOIN sys.partition_functions AS pf
+ON pf.function_id = ps.function_id JOIN sys.destination_data_spaces     AS dds2
+ON dds2.partition_scheme_id = ps.data_space_id AND dds2.destination_id = p.partition_number
+JOIN sys.filegroups AS fg ON fg.data_space_id = dds2.data_space_id
+LEFT JOIN sys.partition_range_values AS prv_left ON ps.function_id = prv_left.function_id AND prv_left.boundary_id = p.partition_number - 1
+LEFT JOIN sys.partition_range_values AS prv_right ON ps.function_id = prv_right.function_id AND prv_right.boundary_id = p.partition_number 
+WHERE OBJECTPROPERTY(p.object_id, 'ISMSShipped') = 0 and  OBJECT_NAME(p.object_id) = 'DDT_2'
+order by 5 ASC
+         
+--'DDT_2' 
+--PDBDocument 
+
+----------------------------PARTITION SCRIPT 128------------------------------------
+--SP_DYNAMIC_PARTITION_DDT_2_DBA 
+--SP_DYNAMIC_PARTITION_PDBDocment_DBA 
+
+DECLARE @sql NVARCHAR(MAX) = N'';
+SELECT @sql += N'KILL ' + CONVERT(VARCHAR(11), session_id) + N';'
+FROM sys.dm_exec_sessions
+WHERE  login_name = N'DMS_USER'
+EXEC sys.sp_executesql @sql;
+
+
+---------------------- CHECK LOGIN RESTRICT_SSMS_LOGINS ------------------------------------------
+
+ SELECT @@servername as Server,name,CASE WHEN d1.LOGIN_NAME  = d2.name THEN '1' ELSE '0' END AS ISRestricted
+FROM      sys.server_principals d2 
+LEFT JOIN RESTRICT_SSMS_LOGINS d1 ON d2.name = d1.LOGIN_NAME
+where d2.name not like '#%' and -- d2.name not like 'BFL\_%' and
+d2.name not like 'NT %' and d2.type not in ('R') and  d2.name not in ('sa')
+order by 3 desc,2 asc
+
+
+
+-------------------------Linked server permission on sercondary server---------------------------------------
+
+
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'EXT_AZURE',@useself=N'False',@locallogin=N'Responsys_comm',@rmtuser=N'SQLADMIN_CIPI_R',@rmtpassword='########'
+GO
+
+USE [master]
+GO
+
+/****** Object:  LinkedServer [EXT_AZURE]    Script Date: 6/18/2019 7:26:05 PM ******/
+EXEC master.dbo.sp_addlinkedserver @server = N'EXT_AZURE', @srvproduct=N'SQL', @provider=N'SQLNCLI', @datasrc=N'EXTCLU-PROD-DB2.bfl.com', @provstr=N'Integrated Security=SSPI;Initial Catalog=Production;Data Source=EXTCLU-PROD-DB2.bfl.com;ApplicationIntent=ReadOnly;User ID=Link_sec', @catalog=N'Customer_Portal_User'
+ /* For security reasons the linked server remote logins password is changed with ######## */
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'EXT_AZURE',@useself=N'False',@locallogin=NULL,@rmtuser=N'Link_sec',@rmtpassword='########'
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'EXT_AZURE',@useself=N'False',@locallogin=N'BFL\sqladmin',@rmtuser=N'SQLADMIN_CIPI_R',@rmtpassword='########'
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname=N'EXT_AZURE',@useself=N'False',@locallogin=N'Responsys_comm',@rmtuser=N'SQLADMIN_CIPI_R',@rmtpassword='########'
+GO
+
+
+----------------------Add User to restrict login through linked server ------------------------------------------
+
+EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N'ADSI', @locallogin = N'BFL\vidyamandava', @useself = N'True'
+
+
+SELECT 'EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N''RBL'', 
+@locallogin = N'''+name+''', @useself = N''True''' FROM 
+sys.server_principals where (type='S' or type = 'U')
+
+
+------------------------------------Linked server Remote Login ---------------------------------------------------------------------------------------
+
+SELECT name,'EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N''EXTRANET'', @locallogin = N'''+name+''', @useself = N''False'', @rmtuser = N''Linked_allow_cipi'', @rmtpassword = N''Linked_allow_cipi'' ' FROM sys.server_principals where (type='S' or type = 'U')
+and name 
+in
+('BFL\oltp_sql_admin'
+,'BFL\oltp_ssis_admin'
+,'CC_SUPPORT'
+,'cibilwatchuser'
+,'ETL_User'
+,'mobile_user'
+,'portal_user'
+,'Responsys_comm'
+,'SQLSCI'
+,'SSRS_USER')
+
+go
+SELECT name,'EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N''EXTRANET'', @locallogin = N'''+name+''', @useself = N''False'', @rmtuser = N''Linked_deny_cipi'', @rmtpassword = N''Linked_deny_cipi'' ' FROM sys.server_principals where (type='S' or type = 'U')
+and name 
+not in
+(
+'sa',
+'##MS_PolicyTsqlExecutionLogin##',
+'NT SERVICE\SQLWriter',
+'NT SERVICE\Winmgmt',
+'NT SERVICE\MSSQLSERVER',
+'NT AUTHORITY\SYSTEM',
+'NT SERVICE\SQLSERVERAGENT',
+'NT SERVICE\ReportServer',
+'NT SERVICE\SQLTELEMETRY',
+'##MS_PolicyEventProcessingLogin##',
+'##MS_SSISServerCleanupJobLogin##',
+'NT AUTHORITY\NETWORK SERVICE',
+'BFL\oltp_sql_admin'
+,'BFL\oltp_ssis_admin'
+,'CC_SUPPORT'
+,'cibilwatchuser'
+,'ETL_User'
+,'mobile_user'
+,'portal_user'
+,'Responsys_comm'
+,'SQLSCI'
+,'SSRS_USER') order by 1
+
+
+-------------------------------Fragmentation chaeck (Sanjay Query)--------------------------------------------------------------------------------------------
+
+SELECT * FROM (
+                SELECT distinct DBName, ISNULL(IndexName,'NOINDEX') AS IndexName, 
+                case when avg_fragmentation_in_percent between 30 and 50 then '>30'
+                when avg_fragmentation_in_percent between 51 and 80 then '>50'
+                when avg_fragmentation_in_percent between 81 and 100 then '>80' END AS 'FRAGLEVEL'
+                from SQL_Management..Frag_output with (nolock)
+                WHERE avg_fragmentation_in_percent>30 and indexName <> 'NULL'
+)SRC
+PIVOT 
+(
+                COUNT(INDEXNAME)
+                FOR FRAGLEVEL IN ([>30],[>50],[>80])
+) PIV;
+
+
+------------------------------------- Enabled Login SP --------------------------------------------------------------------------------------
+
+dbo.SP_ENABLED_LOGIN @loginname = N'BFL\shobhitmisra'
+
+-------------------------- RESTORE SCRIPTS 32.7 -------------------------------------------------------------------------------------------------
+
+RESTORE DATABASE SFDC_STS   
+FROM
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_1_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_2_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_3_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_4_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_5_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_6_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_7_FULL.bak',
+URL='https://sfdcsqlbackup.blob.core.windows.net/fullbkpsts/SFDC_STS_20190628210002_8_FULL.bak' 
+with  MOVE 'SFDC_STS' to 'H:\DATAFILES\sfdc_sts.mdf',  
+      MOVE 'SFDC_STS_log' to 'S:\logfile\sfdc_sts.ldf',
+STATS = 1 ,norecovery 
+
+--RESTORE DATABASE DM_STAGING   
+--FROM URL = 'https://sfdcsqlbackup.blob.core.windows.net/fullbkpsf/DM_STAGING_backup_2019_06_28_220030_1961289.bak'  
+--WITH CREDENTIAL = N'AzureBackups_SFDC',
+--MOVE 'DM_STAGING' to 'R:\DATAFILES\SFDC_UPLOAD.mdf', 
+--MOVE 'DM_STAGING_log' to 'V:\LOGFILES\SFDC_UPLOAD.ldf',
+--STATS = 1 ,norecovery 
+
+--RESTORE DATABASE DM_STAGING   
+--FROM URL = N'https://sfdcsqlbackup.blob.core.windows.net/diffbkpsf/SFDC_UPLOAD_backup_2019_07_01_153155_3146801.bak'
+--WITH CREDENTIAL = N'AzureBackups_SFDC',
+-- STATS = 1 ,norecovery 
+
+
+-------------------------------CHECK DATABASE FRAGMENTATION ---------------------------------------------------------------------------------- 
+
+SELECT 
+       migs.user_seeks as [Estimated Index Uses],
+       migs.avg_user_impact [Estimated Index Impact %],
+       migs.avg_total_user_cost[Estimated Avg Query Cost],    
+       db_name(mid.database_id) AS DatabaseID,
+       OBJECT_SCHEMA_NAME (mid.OBJECT_ID,mid.database_id) AS [SchemaName],
+       OBJECT_NAME(mid.OBJECT_ID,mid.database_id) AS [TableName],
+       'CREATE INDEX [IX_' + OBJECT_NAME(mid.OBJECT_ID,mid.database_id) + '_'
+       + REPLACE(REPLACE(REPLACE(ISNULL(mid.equality_columns,''),', ','_'),'[',''),']','') 
+       + CASE
+                     WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns IS NOT NULL 
+                     THEN '_'
+                     ELSE ''
+         END
+       + REPLACE(REPLACE(REPLACE(ISNULL(mid.inequality_columns,''),', ','_'),'[',''),']','')
+       + ']'
+       + ' ON ' + mid.statement
+       + ' (' + ISNULL (mid.equality_columns,'')
+       + CASE WHEN mid.equality_columns IS NOT NULL AND mid.inequality_columns 
+       IS NOT NULL THEN ',' ELSE
+       '' END
+       + ISNULL (mid.inequality_columns, '')
+       + ')'
+       + ISNULL (' INCLUDE (' + mid.included_columns + ') WITH (MAXDOP =?, FILLFACTOR=?, ONLINE=?, SORT_IN_TEMPDB=?);', '') AS [Create TSQL],
+       mid.equality_columns, 
+       mid.inequality_columns, 
+       mid.included_columns,
+       migs.unique_compiles,
+       migs.last_user_seek  
+FROM sys.dm_db_missing_index_group_stats AS migs WITH (NOLOCK)
+INNER JOIN sys.dm_db_missing_index_groups AS mig WITH (NOLOCK) ON migs.group_handle = mig.index_group_handle
+INNER JOIN sys.dm_db_missing_index_details AS mid WITH (NOLOCK) ON mig.index_handle = mid.index_handle
+where db_name(mid.database_id)='CIBIL_WATCH' and migs.avg_user_impact>30
+ORDER BY [Estimated Index Uses] DESC OPTION (RECOMPILE);
+
+----------------------------CHECK PERMISSION GRANTED TO USER -----------------------------------------------------------------------------------------------
+
+SELECT TOP (1000) [datetime_local]
+      ,[action]
+      ,[data]
+      ,[traceName]
+      ,[category_id]
+      ,[ObjectType]
+      ,[hostname]
+      ,[Applicationname]
+      ,[LoginName]
+      ,[Databasename]
+  FROM [SQL_Management].[dbo].[FM_AccessControlChanges] order by 1 desc
+
+---------------------------------------- LINKED SERVER RESTRICTION -----------------------------------------------------------------------------------
+
+SELECT name,'EXEC master.dbo.sp_addlinkedsrvlogin @rmtsrvname = N''EXTRANET'', @locallogin = N'''+name+''', @useself = N''False'', @rmtuser = N''DBA_R_WO_PII'', @rmtpassword = N''Utilit@ri@n!3'' ' FROM sys.server_principals where (type='S' or type = 'U')
+and name 
+not in
+(
+'sa',
+'##MS_PolicyTsqlExecutionLogin##',
+'NT SERVICE\SQLWriter',
+'NT SERVICE\Winmgmt',
+'NT SERVICE\MSSQLSERVER',
+'NT AUTHORITY\SYSTEM',
+'NT SERVICE\SQLSERVERAGENT',
+'NT SERVICE\ReportServer',
+'NT SERVICE\SQLTELEMETRY',
+'##MS_PolicyEventProcessingLogin##',
+'##MS_SSISServerCleanupJobLogin##',
+'NT AUTHORITY\NETWORK SERVICE',
+'DBA_R_W_PII',
+'DBA_R_WO_PII',
+'DBA_RW_W_PII',
+'DBA_RW_WO_PII',
+'sfdc_allow_cipi',
+'sfdc_deny_cipi',
+'NT SERVICE\MSSQL$EXTRANET',
+'NT SERVICE\SQLAgent$EXTRANET',
+'BFL\_prateekb','BFL\_pankajp','BFL\sqladmin','DBA_LINKEDSERVER') order by 1 asc
+
+---------------------------KILL ALL DB SESSIONS ------------------------------------------------------------------------------------------------
+
+SELECT spid,sp.[status],loginame [Login],hostname, blocked BlkBy,sd.name DBName,cmd Command,cpu CPUTime,
+memusage Memory,physical_io DiskIO,lastwaittype LastWaitType,[program_name] ProgramName,
+last_batch LastBatch,login_time LoginTime,
+'kill ' + CAST(spid as varchar(10)) as 'Kill Command'
+FROM master.dbo.sysprocesses sp JOIN master.dbo.sysdatabases sd ON sp.dbid = sd.dbid
+WHERE sd.name IN ('PaymentGateway') 
+ORDER BY spid
+
+-----------------------------DATABASE ISOLATION----------------------------------------------------------------------------------------------
+
+SELECT is_read_committed_snapshot_on FROM sys.databases WHERE [name] = 'DBA_TESTING'
+
+ALTER DATABASE DBA_TESTING SET READ_COMMITTED_SNAPSHOT ON --WITH ROLLBACK IMMEDIATE 
+GO
+
+DBCC useroptions
+
+
+----------------------------- CHECK BACKUP AND COMPRESSED BACKUP SIZE ----------------------------------------------------------------------------------------------
+
+
+
+SELECT server_name,database_name,backup_size/1024/1024/1024 as Actual_Backup_Size ,
+compressed_backup_size/1024/1024/1024 as compressed_Backup_Size,
+backup_start_date,backup_finish_date
+FROM msdb.dbo.backupset
+where --backup_start_date >= '20190801' 
+ database_name = 'BAJAJFIN-MPS-PROD'
+and type='D'
+order by 6 desc
+--------------------------------- Performance Tuning --------------------------------------------------------------------------------------------------------------------- 
+
+EXEC SQL_MANAGEMENT..SP_WhoIsActive_output--admam
+EXEC SQL_MANAGEMENT..sp_BlitzWho
+EXEC sql_management..sp_Blitzcache @SortOrder = 'CPU',@Top = 50
+EXEC SQL_MANAGEMENT..sp_BlitzCache @ExpertMode = 1;
+EXEC sql_management..sp_Blitzcache @SortOrder = 'executions',@Top = 50
+EXEC sql_management..sp_Blitzcache @Top = 50
+EXEC sql_management..sp_Blitzcache @DatabaseName = CIBIL_WATCH,@ExpertMode = 1 
+EXEC sql_management..sp_Blitzlock
+EXEC sql_management..sp_BlitzIndex @DatabaseName = SFDC_STS
+EXEC sql_management..sp_BlitzIndex @DatabaseName='RBL_CARD_PROD', @SchemaName='dbo', @TableName='[DIMSUPPLIERMANUFACTURER]',@SkipPartitions = 1;
+EXEC sql_management..sp_BlitzIndex @BringThePain = 1, @DatabaseName='BAJAJFIN-MPS-PROD', @SchemaName='dbo', @TableName='PDC_fate_transaction_stage_dtl';
+EXEC sql_management..sp_BlitzIndex @DatabaseName = CIBIL_WATCH
+
+
+EXEC SQL_MANAGEMENT..sp_Blitz
+EXEC SQL_MANAGEMENT..sp_Blitz @CheckUserDatabaseObjects = 0, @CheckServerInfo = 1;
+
+EXEC SQL_MANAGEMENT..sp_BlitzFirst @ExpertMode = 1;
+EXEC SQL_MANAGEMENT..sp_BlitzFirst
+
+--By Adam Machanic  
+EXEC sp_WhoIsActive @get_locks = 1
+EXEC sp_WhoIsActive @help = 1
+EXEC dbo.sp_WhoIsActive @get_transaction_info = 1,@get_outer_command = 1,@get_plans = 1
+EXEC sp_WhoIsActive @get_plans = 1 --– this gives you the execution plans for running queries.
+EXEC sp_WhoIsActive @get_locks = 1 --– gives you an XML snippet you can click on to see what table, row, object, etc locks each query owns. Useful when you’re trying to figure out why one query is blocking others.
+EXEC sp_WhoIsActive @get_task_info = 2 --
+
+
+
+----------------------------------------job History------------------------------------------------------------------------------------------------------------------------------- 
+
+Utilit@ri@n!3
+
+SELECT 
+
+[sJOB].[name] AS [JobName]
+    , CASE 
+        WHEN [sJOBH].[run_date] IS NULL OR [sJOBH].[run_time] IS NULL THEN NULL
+        ELSE CAST(
+                CAST([sJOBH].[run_date] AS CHAR(8))
+                + ' ' 
+                + STUFF(
+                    STUFF(RIGHT('000000' + CAST([sJOBH].[run_time] AS VARCHAR(6)),  6)
+                        , 3, 0, ':')
+                    , 6, 0, ':')
+                AS DATETIME)
+      END AS [LastRunDateTime]
+    , CASE [sJOBH].[run_status]
+        WHEN 0 THEN 'Failed'
+        WHEN 1 THEN 'Succeeded'
+        WHEN 2 THEN 'Retry'
+        WHEN 3 THEN 'Canceled'
+        WHEN 4 THEN 'Running' -- In Progress
+      END AS [LastRunStatus]
+    , STUFF(
+            STUFF(RIGHT('000000' + CAST([sJOBH].[run_duration] AS VARCHAR(6)),  6)
+                , 3, 0, ':')
+            , 6, 0, ':') 
+        AS [LastRunDuration (HH:MM:SS)]
+    , [sJOBH].[message] AS [LastRunStatusMessage]
+    , CASE [sJOBSCH].[NextRunDate]
+        WHEN 0 THEN NULL
+        ELSE CAST(
+                CAST([sJOBSCH].[NextRunDate] AS CHAR(8))
+                + ' ' 
+                + STUFF(
+                    STUFF(RIGHT('000000' + CAST([sJOBSCH].[NextRunTime] AS VARCHAR(6)),  6)
+                        , 3, 0, ':')
+                    , 6, 0, ':')
+                AS DATETIME)
+      END AS [NextRunDateTime]
+FROM 
+    [msdb].[dbo].[sysjobs] AS [sJOB]
+    LEFT JOIN (
+                SELECT
+                    [job_id]
+                    , MIN([next_run_date]) AS [NextRunDate]
+                    , MIN([next_run_time]) AS [NextRunTime]
+                FROM [msdb].[dbo].[sysjobschedules]
+                GROUP BY [job_id]
+            ) AS [sJOBSCH]
+        ON [sJOB].[job_id] = [sJOBSCH].[job_id]
+    LEFT JOIN (
+                SELECT 
+                    [job_id]
+                    , [run_date]
+                    , [run_time]
+                    , [run_status]
+                    , [run_duration]
+                    , [message]
+                    , ROW_NUMBER() OVER (
+                                            PARTITION BY [job_id] 
+                                            ORDER BY [run_date] DESC, [run_time] DESC
+                      ) AS RowNumber
+                FROM [msdb].[dbo].[sysjobhistory]
+                WHERE [step_id] = 0
+            ) AS [sJOBH]
+        ON [sJOB].[job_id] = [sJOBH].[job_id]
+        AND [sJOBH].[RowNumber] = 1
+where [sJOB].[name] like 'DBA_%'
+ORDER BY [JobName]
+
+------------------------------------------ Command shell permission -----------------------------------------------------------------------------------
+use master
+go
+GRANT EXECUTE ON xp_cmdshell TO [Domain\TestUser]
+
+
+------------------------------------------------ORPHEN USER -----------------------------------------------------------------------------
+
+USE [master]
+GO
+begin
+set nocount on
+-- get orphaned users  
+ declare @user varchar(max) 
+ declare c_orphaned_user cursor for 
+  select name
+  from sys.database_principals 
+  where type in ('G','S','U') 
+  and authentication_type<>2 -- Use this filter only if you are running on SQL Server 2012 and major versions and you have "contained databases"
+  and [sid] not in ( select [sid] from sys.server_principals where type in ('G','S','U') ) 
+  and name not in ('dbo','guest','INFORMATION_SCHEMA','sys','MS_DataCollectorInternalUser')  open c_orphaned_user 
+ fetch next from c_orphaned_user into @user
+while(@@FETCH_STATUS=0)
+begin
+  -- alter schemas for user 
+  declare @schema_name varchar(max) 
+  declare c_schema cursor for 
+   select name from  sys.schemas where USER_NAME(principal_id)=@user
+  open c_schema 
+  fetch next from c_schema into @schema_name
+  while (@@FETCH_STATUS=0)
+  begin
+   declare @sql_schema varchar(max)
+   select @sql_schema='ALTER AUTHORIZATION ON SCHEMA::['+@schema_name+ '] TO [dbo]'
+   print @sql_schema
+--   exec(@sql_schema)
+   fetch next from c_schema into @schema_name
+  end
+  close c_schema
+  deallocate c_schema   
+  
+  -- alter roles for user 
+  declare @dp_name varchar(max) 
+  declare c_database_principal cursor for 
+   select name from sys.database_principals
+   where type='R' and user_name(owning_principal_id)=@user
+  open c_database_principal
+  fetch next from c_database_principal into @dp_name
+  while (@@FETCH_STATUS=0)
+  begin
+   declare @sql_database_principal  varchar(max)
+   select @sql_database_principal ='ALTER AUTHORIZATION ON ROLE::['+@dp_name+ '] TO [dbo]'
+   print @sql_database_principal 
+  -- exec(@sql_database_principal )
+   fetch next from c_database_principal into @dp_name
+  end
+  close c_database_principal
+  deallocate c_database_principal
+    
+  -- drop roles for user 
+  declare @role_name varchar(max) 
+  declare c_role cursor for 
+   select dp.name--,USER_NAME(member_principal_id)
+   from sys.database_role_members drm
+   inner join sys.database_principals dp 
+   on dp.principal_id= drm.role_principal_id
+   where USER_NAME(member_principal_id)=@user 
+  open c_role 
+  fetch next from c_role into @role_name
+  while (@@FETCH_STATUS=0)
+  begin
+   declare @sql_role varchar(max)
+   select @sql_role='EXEC sp_droprolemember N'''+@role_name+''', N'''+@user+''''
+   print @sql_role
+   --exec (@sql_role)
+   fetch next from c_role into @role_name
+  end
+  close c_role
+  deallocate c_role   
+      
+  -- drop user
+  declare @sql_user varchar(max)
+  set @sql_user='DROP USER ['+@user +']'
+  print @sql_user
+  --exec (@sql_user)
+  fetch next from c_orphaned_user into @user
+end
+close c_orphaned_user
+deallocate c_orphaned_user
+set nocount off
+end
+
+
+-----------------------------------------Show plan for each db-----------------------------------------------------------------
+                                                                                                                               
+EXEC sp_MSforeachdb N'IF EXISTS                                                                                                
+(                                                                                                                              
+SELECT 1 FROM sys.databases WHERE name = ''?''                                                                                 
+AND Is_read_only <> 1                                                                                                          
+)                                                                                                                              
+BEGIN                                                                                                                          
+print ''Use [?]; GRANT Showplan TO [BFL\miteshdalvi]''                                                                         
+END';                                                                                                                          
+                                                                                                                               
+                                                                                                                               
+--------------------B2B_Reports pointing changed ------------------------------------------------------------------------------
+                                                                                                                               
+Reports Pointing Change To Production / DR                                                                                     
+                                                                                                                               
+Server : 10.128.1.128\Extranet                                                                                                 
+DB :                                                                                                                           
+use B2B_Reports                                                                                                                
+                                                                                                                               
+SELECT TOP 10 * FROM [dbo].Mst_Report_SystemDetails(NOLOCK)                                                                    
+                                                                                                                               
+--Reports Point to PRODUCTION                                                                                                  
+UPDATE Mst_Report_SystemDetails                                                                                                
+SET SystemFlag = 'P'                                                                                                           
+                                                                                                                               
+--Reports Point to DR                                                                                                          
+UPDATE Mst_Report_SystemDetails                                                                                                
+SET SystemFlag = 'D'                                                                                                           
+WHERE ReportName <> 'DealerInterest'                                                                                           
+                                                                                                                               
+--------------------------------CHeck CDC Status-------------------------------------------------------------------------------
+                                                                                                                               
+SELECT * from sys.dm_cdc_log_scan_sessions where empty_scan_count = 0;                                                         
+go                                                                                                                             
+SELECT latency,last_commit_cdc_time FROM sys.dm_cdc_log_scan_sessions WHERE session_id = 0                                     
+GO                                                                                                                             
+SELECT command_count/duration AS [Throughput] FROM sys.dm_cdc_log_scan_sessions WHERE session_id = 0                           
+                                                                                                                               
+----------------------------------------Change windows lock time (in sececonds)------------------------------------------------
+                                                                                                                               
+powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_VIDEO VIDEOCONLOCK 30000000                                                       
+                                                                                                                               
+---------------------Add New log file ----------------------------------------------------------------------------------------------------------
+
+
+ALTER DATABASE [BAJAJFIN-MPS-PROD] MODIFY FILE (NAME = 'JGPS-BAJAJFIN-MPS-SIT_log',FILEGROWTH = 0)
+
+ALTER DATABASE [BAJAJFIN-MPS-PROD]
+ADD LOG FILE ( NAME = 'JGPS-BAJAJFIN-MPS-SIT_log_2',  
+FILENAME = 'H:\Logfiles\JGPS-BAJAJFIN-MPS-SIT_22_sep_log_2.ldf',  
+SIZE = 1024 MB,MAXSIZE = UNLIMITED,FILEGROWTH = 1024MB );
+
+
+---------------------------------------Database wise users--------------------------------------------------------------------
+DECLARE @dbname VARCHAR(50);
+DECLARE @statement NVARCHAR(MAX);
+DECLARE db_cursor CURSOR LOCAL FAST_FORWARD FOR
+SELECT name
+FROM master.sys.databases
+WHERE name NOT IN ( 'master', 'msdb', 'model', 'tempdb','SSISDB','ReportServer' ,'ReportServerTempDB,')
+      AND state_desc = 'online';
+OPEN db_cursor;
+FETCH NEXT FROM db_cursor
+INTO @dbname;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+
+    SELECT @statement
+        = N'use ' + @dbname + N';'
+          + N'SELECT
+
+ServerName=@@servername, dbname=db_name(db_id()),p.name as UserName, p.type_desc as TypeOfLogin
+
+from sys.database_principals p where p.type_desc!=''DATABASE_ROLE'' and p.name not in (''dbo'',''guest'',''INFORMATION_SCHEMA'',''sys''
+)
+
+'   ;
+
+    EXEC sp_executesql @statement;
+
+    FETCH NEXT FROM db_cursor
+    INTO @dbname;
+END;
+CLOSE db_cursor;
+DEALLOCATE db_cursor;
+
+
+----------------DB Startup---------------------------------------------------------------------------------------------------------------
+
+select DB_name(database_id), wait_type, wait_time, blocking_session_id, wait_time/1024 wait_Insec, wait_resource,
+* from sys.dm_exec_requests where command = 'db startup'
+
+----------------------- Check Index Details ---------------------------------------------------------------------------
+
+exec sql_management..sp_blitzindex @databasename='Banking_presentation'
+EXEC dbo.sp_BlitzIndex @DatabaseName='Banking_presentation', @SchemaName='dbo', @TableName='dbo_GPTRAN_PARSEDMESSAGE_CT';
+EXEC dbo.sp_BlitzIndex @DatabaseName='Banking_presentation', @SchemaName='dbo', @TableName='FACT_BANKING_PRESENTATION_REAL_TIME';
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+BACKUP DATABASE [Customer360] TO URL =  'https://odssqlbackup.blob.core.windows.net/fullbkppri/Customer360_04042020_085204_FULL.bak'                            
+WITH CREDENTIAL='azurebackups_ce360',INIT, COMPRESSION,STATS =1 
+
+
+----------------High CPU ---------------------------------
+
+SELECT TOP 50
+    Convert(varchar, qs.creation_time, 109) as Plan_Compiled_On,
+    qs.execution_count as 'Total Executions',
+    qs.total_worker_time as 'Overall CPU Time Since Compiled',
+    Convert(Varchar, qs.last_execution_time, 109) as 'Last Execution Date/Time',
+    cast(qs.last_worker_time as varchar) +'   ('+ cast(qs.max_worker_time as Varchar)+' Highest ever)' as 'CPU Time for Last Execution (Milliseconds)',
+    Convert(varchar,(qs.last_worker_time/(1000))/(60*60)) + ' Hrs (i.e. ' + convert(varchar,(qs.last_worker_time/(1000))/60) + ' Mins & ' + convert(varchar,(qs.last_worker_time/(1000))%60) + ' Seconds)' as 'Last Execution Duration',
+    qs.last_rows as 'Rows returned',
+    qs.total_logical_reads/128 as 'Overall Logical Reads (MB)',
+    qs.max_logical_reads/128 'Highest Logical Reads (MB)',
+    qs.last_logical_reads/128 'Logical Reads from Last Execution (MB)',
+    qs.total_physical_reads/128 'Total Physical Reads Since Compiled (MB)',
+    qs.last_dop as 'Last DOP used',
+    qs.last_physical_reads/128 'Physical Reads from Last Execution (MB)',
+    t.[text] 'Query Text',
+    qp.query_plan as 'Query Execution Plan',
+    DB_Name(t.dbid) as 'Database Name',
+    t.objectid as 'Object ID',
+    t.encrypted as 'Is Query Encrypted'
+    --qs.plan_handle --Uncomment this if you want query plan handle
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(plan_handle) AS t
+CROSS APPLY sys.dm_exec_query_plan(plan_handle) AS qp
+ORDER BY qs.last_worker_time DESC
+Go
+
+---------------------------------------------------------
+
+SELECT DATEPART(HOUR,STARTDATETIME) as DATETIMES,count(1) COUNTS FROM B2C_HOME_PAGE_ALL_EXECUTION_LOG(NOLOCK)
+WHERE CAST(STARTDATETIME AS DATE)='2020-04-12' AND DATEDIFF(SECOND,STARTDATETIME,ENDDATETIME)>10
+--AND STARTDATETIME>='2020-04-07 10:01:43.460'
+group by DATEPART(HOUR,STARTDATETIME)
+ORDER BY DATETIMES
+
+-----------------------------------------
+
+SELECT DATEPART(Day,STARTDATETIME) as Day_,DATEPART(HOUR,STARTDATETIME) as Hr_,count(1) COUNTS FROM B2C_HOME_PAGE_ALL_EXECUTION_LOG(NOLOCK)
+WHERE CAST(STARTDATETIME AS DATE)>'2020-04-11' AND DATEDIFF(SECOND,STARTDATETIME,ENDDATETIME)>10 and procedurename = 'SP_GET_B2C_HOME_PAGE_ALL'
+--AND STARTDATETIME>='2020-04-07 10:01:43.460'
+group by DATEPART(HOUR,STARTDATETIME),DATEPART(Day,STARTDATETIME)
+ORDER BY DAY_,Hr_
+
+----------------------------------------------------------
+
+exec usp_tables_compress_report @compress_method = 'PAGE'
+
+-------------------------------
+
+;with cte
+as
+(
+select *,ROW_NUMBER() over (partition by tblname order by RecordedDate desc) as rno from [UnchangedTables](nolock)
+where RecordedDate >= '2020-03-01 00:00:00.857'
+)
+select * from cte where rno=1
+
+------------------------- TABLE PARTITION-------------------
+
+SELECT
+OBJECT_NAME(p.OBJECT_ID) AS 'TableName'
+,p.index_id AS 'IndexId'
+,CASE
+WHEN p.index_id = 0 THEN 'HEAP'
+ELSE i.name
+END AS 'IndexName'
+,p.partition_number AS 'PartitionNumber'
+,prv_left.value AS 'LowerBoundary'
+,prv_right.value AS 'UpperBoundary'
+,CASE
+WHEN fg.name IS NULL THEN ds.name
+ELSE fg.name
+END AS 'FileGroupName'
+,CAST(p.used_page_count * 0.0078125 AS NUMERIC(18,2)) AS 'UsedPages_MB'
+,CAST(p.in_row_data_page_count * 0.0078125 AS NUMERIC(18,2)) AS 'DataPages_MB'
+,CAST(p.reserved_page_count * 0.0078125 AS NUMERIC(18,2)) AS 'ReservedPages_MB'
+,CASE
+WHEN p.index_id IN (0,1) THEN p.row_count
+ELSE 0
+END AS 'RowCount'
+--,CASE
+--WHEN p.index_id IN (0,1) THEN 'data'
+--ELSE 'index'
+--END 'Type'
+FROM sys.dm_db_partition_stats p
+INNER JOIN sys.indexes i
+ON i.OBJECT_ID = p.OBJECT_ID AND i.index_id = p.index_id
+INNER JOIN sys.data_spaces ds
+ON ds.data_space_id = i.data_space_id
+LEFT OUTER JOIN sys.partition_schemes ps
+ON ps.data_space_id = i.data_space_id
+LEFT OUTER JOIN sys.partition_functions pf
+ON ps.function_id = pf.function_id
+LEFT OUTER JOIN sys.destination_data_spaces dds
+ON dds.partition_scheme_id = ps.data_space_id
+AND dds.destination_id = p.partition_number
+LEFT OUTER JOIN sys.filegroups fg
+ON fg.data_space_id = dds.data_space_id
+LEFT OUTER JOIN sys.partition_range_values prv_right
+ON prv_right.function_id = ps.function_id
+AND prv_right.boundary_id = p.partition_number
+LEFT OUTER JOIN sys.partition_range_values prv_left
+ON prv_left.function_id = ps.function_id
+AND prv_left.boundary_id = p.partition_number - 1
+WHERE
+OBJECTPROPERTY(p.OBJECT_ID, 'ISMSSHipped') = 0
+AND p.index_id IN (0,1)
+and partition_number in ('19','20','21')
+
+------Partition------
+
+SELECT
+part.partition_number,
+sum(alloc.total_pages/128) AS TotalTableSizeInMB,
+sum(alloc.used_pages/128) AS UsedSizeInMB,
+sum(alloc.data_pages/128) AS DataSizeInMB
+FROM sys.allocation_units AS alloc
+INNER JOIN sys.partitions AS part ON alloc.container_id = CASE WHEN alloc.type in(1,3) THEN part.hobt_id ELSE part.partition_id END
+LEFT JOIN sys.indexes AS idx ON idx.object_id = part.object_id AND idx.index_id = part.index_id
+where part.object_id = object_id('SMS_SENT_PROMO')
+group by partition_number
+
+
+--------
+
+use SMS_RESPONSYS
+
+
+SELECT partition_number, rows
+FROM sys.partitions
+WHERE OBJECT_NAME(OBJECT_ID)='sms_sent_service'; ------20	159704223
+GO
+
+SELECT partition_number, rows
+FROM sys.partitions
+WHERE OBJECT_NAME(OBJECT_ID)='sms_sent_promo'; ------20	15211209
+GO
+
+
+--TRUNCATE TABLE [dbo].[sms_sent_service] WITH (PARTITIONS (20));
+
+--TRUNCATE TABLE [dbo].[sms_sent_promo] WITH (PARTITIONS (20));
+
+
+------------- SP_IVR -------------------------------------------------------------
+
+Server :- 10.156.32.4
+
+Database:- BFL_ODS
+
+EXEC [dbo].[SP_IVR_DETAILS_MAIN]   @MOBILE_NO = '7620477272', @CustID = NULL, @DOB = NULL, @EmiCard = NULL   
+
+EXEC [dbo].[SP_IVR_DETAILS_MAIN]   @MOBILE_NO = NULL, @CustID = '86493991', @DOB = NULL, @EmiCard = NULL   
+
+EXEC BFL_ODS..SP_IVR_DETAILS_MAIN '7620477272'
+
+-------------------- Clone permission -----------------------
+
+EXEC [perms].[clonePermissions] @UserName = 'partner\1444512', @NewUser = 'Partner\tejashreejadhav3', 
+@CreateLogins = 1, @ExecuteScript = 0
+
+----------------------------Table details with Filegroup------------------
+
+SELECT
+FILEGROUP_NAME(AU.data_space_id) AS FileGroupName,
+OBJECT_NAME(Parti.object_id) AS TableName,
+ind.name AS ClusteredIndexName,
+AU.total_pages/128 AS TotalTableSizeInMB
+FROM sys.allocation_units AS AU
+INNER JOIN sys.partitions AS Parti ON AU.container_id = CASE WHEN AU.type in(1,3) THEN Parti.hobt_id ELSE Parti.partition_id END
+LEFT JOIN sys.indexes AS ind ON ind.object_id = Parti.object_id AND ind.index_id = Parti.index_id
+where FILEGROUP_NAME(AU.data_space_id) in ('CURRENT_DISB','HISTORY_DISB')
+ORDER BY TotalTableSizeInMB DESC
+
+-------------Login Faile Detail-----------------
+
+--usp_GetFailedLoginsListFromLastWeek
+
+-------------- UNUSED INDEX ---------------
+
+SELECT @@servername ServerName , [DB_NAME],[schema_name],[object_name],[indexname],[user_seeks],[user_scans],[user_lookups]
+,[user_updates]
+FROM [SQL_Management].[dbo].[UNUSED_INDEX]
+where Execute_Date= '2020-08-09' and user_scans = '0' and user_seeks = '0' and user_lookups = '0' and user_updates<5
+and db_name not in ('tempdb','SQL_Management','msdb','model','SSISDB') and indexname not like 'U%' and object_name not in ('DDLEvents')
+
+-------------Drop Login & Users---------------
+
+EXEC sp_MSForEachDB 'USE [?];
+IF  EXISTS (SELECT * FROM sys.schemas WHERE name = N''BFL\muralidharkhot2'')
+DROP SCHEMA [BFL\muralidharkhot2]; '
+GO
+EXEC sp_MSForEachDB 'USE [?];
+IF  EXISTS (SELECT * FROM sys.database_principals WHERE name = N''BFL\muralidharkhot2'')
+DROP USER [BFL\muralidharkhot2]; '
+go
+IF  EXISTS (SELECT * FROM sys.server_principals WHERE name = N'BFL\muralidharkhot2')
+DROP LOGIN [BFL\muralidharkhot2];
+
+-------------Check User Permissions---------------
+
+use master
+go
+DECLARE @DB_USers TABLE
+(DBName sysname NULL, 
+UserName sysname NULL, 
+LoginType sysname NULL, 
+AssociatedRole varchar(max) NULL,
+create_date datetime NULL,
+modify_date datetime)
+INSERT @DB_USers
+EXEC sp_MSforeachdb
+'USE [?]
+SELECT ''?'' AS DB_Name,
+CASE prin.name 
+    when ''dbo'' 
+    THEN prin.name + '' (''+ (SELECT SUSER_SNAME(owner_sid) FROM master.sys.databases WHERE name =''?'') + '')'' 
+    --WHEN prin.name  is NULL THEN ''CaseExample2''
+    ELSE prin.name 
+END AS UserName,
+   prin.type_desc AS LoginType,
+   ISNULL(USER_NAME(mem.role_principal_id),'''') AS AssociatedRole ,
+   create_date,
+   modify_date
+FROM sys.database_principals prin
+   LEFT OUTER JOIN sys.database_role_members mem 
+      ON prin.principal_id=mem.member_principal_id
+WHERE prin.sid IS NOT NULL
+   AND prin.sid NOT IN (0x00) 
+   AND prin.is_fixed_role <> 1 
+   AND prin.name LIKE ''COMPUCOM\$sql002'''
+SELECT DBName,
+       UserName,
+       LoginType,
+       Create_date,
+       Modify_date,
+       STUFF(
+      (SELECT ',' + CONVERT(VARCHAR(500),associatedrole)
+      FROM @DB_USers user2
+      WHERE user1.DBName=user2.DBName 
+        AND user1.UserName=user2.UserName
+FOR XML PATH('')),1,1,'') AS Permissions_user
+FROM @DB_USers user1
+GROUP BY dbname,
+          username,
+          logintype,
+          create_date,
+          modify_date
+--HAVING username IN (<Use this to filter on multiple usernames.>)
+ORDER BY DBName,username
+
+-------------Check SQL Jobs list configured SSIS in it---------------
+
+declare @MyJobTable table 
+(
+JobName nvarchar(255)
+,StepName nvarchar(255)
+,StepID int
+,SSIDName nvarchar(255)
+,StepCommand nvarchar(1024)
+)
+
+declare @MyCursor as cursor
+declare @MyName as nvarchar(255)
+
+set @MyCursor = CURSOR for select name from msdb.dbo.sysssispackages
+
+open @mycursor
+fetch next from @MyCursor into @MyName
+
+while @@FETCH_STATUS = 0
+begin 
+
+insert into @MyJobTable
+(JobName,StepName,StepID,SSIDName,StepCommand)
+(select
+jobs.name as JobName
+,steps.step_name as StepName
+,steps.step_id as StepID
+,@MyName as SSIDName
+,steps.command as StepCommand
+from msdb.dbo.sysjobs as jobs
+join msdb.dbo.sysjobsteps as steps
+on jobs.job_id = steps.job_id
+where steps.subsystem = 'SSIS'
+and steps.command like '%'+@MyName+'%')
+fetch next from @MyCursor into @MyName
+
+end
+
+select * from @MyJobTable
+order by JobName,StepID
